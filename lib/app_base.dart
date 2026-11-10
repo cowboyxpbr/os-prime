@@ -577,9 +577,9 @@ class ServicoClientes {
 // ============================================================================
 class ServicoNotificacaoOneSignal {
   // 🔔 ID OFICIAL (4708) E CHAVE REST ATIVA
-  static const String _appId = '5174ec50-0787-4708-ae16-f2674e42c657';
+  static const String _appId = '04552b74-f865-437f-94b6-4b07dc65d901';
   static const String _restApiKey =
-      'os_v2_app_kf2oyuahq5dqrlqw6jtu4qwgk6vytbicuuau3fvkke63tldeo2c3rzuolaramywtc5ot2pqm2hzlnsmzw3s6gfnleoztkfhingrr6fa';
+      'os_v2_app_arksw5hymvbx7ffwjmd5yzozafjznbggzvjezlf6nbkk326xqwn7z5pe4zyhqpt7cw2ddk3oxcm6zjfdp6e73kzhwrurudj6ywzwomi';
 
   static Future<void> _dispararREST({
     required List<String> logins,
@@ -1924,5 +1924,6 @@ class PdfEngine {
     return file;
   }
 }
+
 
 

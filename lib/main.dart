@@ -18,7 +18,7 @@ void main() async {
 
   // CONFIGURAÇÃO ONESIGNAL (COM SOM E PERMISSÃO ATIVA - ID CORRIGIDO COM 4708)
   try {
-    OneSignal.initialize("5174ec50-0787-4708-ae16-f2674e42c657");
+    OneSignal.initialize("04552b74-f865-437f-94b6-4b07dc65d901");
     
     // Solicita permissão no Android 13+ e iOS
     await OneSignal.Notifications.requestPermission(true);
@@ -504,4 +504,5 @@ class _TelaLoginState extends State<TelaLogin> {
     );
   }
 }
+
 
