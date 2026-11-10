@@ -1,0 +1,106 @@
+workflows:
+  android-workflow:
+    name: Gerar APK Eletro Heinzen
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      java: 17
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Criar estrutura e pacotes
+        script: |
+          flutter create . --platforms=android --org com.eletroheinzen
+          flutter pub get
+      - name: Inserir permissao de Internet no AndroidManifest
+        script: |
+          python3 -c "
+          manifest = 'android/app/src/main/AndroidManifest.xml'
+          with open(manifest, 'r') as f:
+              c = f.read()
+          perms = '\n    <uses-permission android:name=\"android.permission.INTERNET\"/>\n    <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>\n'
+          if 'android.permission.INTERNET' not in c:
+              c = c.replace('<application', perms + '    <application')
+              with open(manifest, 'w') as f:
+                  f.write(c)
+          print('Permissoes de Internet adicionadas com sucesso!')
+          "
+      - name: Aplicar Icone Personalizado do App
+        script: |
+          ICON=$(find . -maxdepth 1 -name "icone.*" | head -n 1)
+          if [ -n "$ICON" ]; then
+            echo "Processando icone oficial: $ICON"
+            rm -rf android/app/src/main/res/mipmap-anydpi-v26
+            
+            sips -s format png -z 48 48 "$ICON" --out android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            sips -s format png -z 72 72 "$ICON" --out android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            sips -s format png -z 96 96 "$ICON" --out android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            sips -s format png -z 144 144 "$ICON" --out android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            sips -s format png -z 192 192 "$ICON" --out android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            
+            for dir in android/app/src/main/res/mipmap-*; do
+              if [ -f "$dir/ic_launcher.png" ]; then
+                cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
+              fi
+            done
+            echo "Icone oficial EH configurado com sucesso em todas as resolucoes!"
+          fi
+      - name: Configurar SDK 36 e minSdk 24
+        script: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" || true
+
+          python3 -c "
+          import os, re
+          for f in ['android/app/build.gradle', 'android/app/build.gradle.kts']:
+              if os.path.exists(f):
+                  with open(f, 'r') as file:
+                      c = file.read()
+                  c = re.sub(r'(compileSdk(Version)?\s*=?\s*).*', r'\g<1>36', c)
+                  c = re.sub(r'(targetSdk(Version)?\s*=?\s*).*', r'\g<1>34', c)
+                  c = re.sub(r'(minSdk(Version)?\s*=?\s*).*', r'\g<1>24', c)
+                  with open(f, 'w') as file:
+                      file.write(c)
+          "
+      - name: Gerar Chave de Assinatura (Keystore)
+        script: |
+          if [ ! -f "eletro.keystore" ]; then
+            echo "Gerando chave nova..."
+            keytool -genkey -v -keystore eletro.keystore -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias eletro -dname "CN=Eletro Heinzen, OU=App, O=Eletro Heinzen, L=Porto Belo, ST=SC, C=BR" -storepass eletro123 -keypass eletro123
+          else
+            echo "Chave permanente eletro.keystore encontrada no GitHub com sucesso!"
+          fi
+      - name: Compilar e Assinar APK Definitivo
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease || ./gradlew assembleDebug
+          cd ..
+          
+          APK_GERADO=$(find . -name "*.apk" | grep -v "intermediate" | head -n 1)
+          echo "APK gerado: $APK_GERADO"
+          
+          APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort -V | tail -n 1)
+          echo "Apksigner: $APKSIGNER"
+          
+          if [ -n "$APK_GERADO" ] && [ -f "eletro.keystore" ]; then
+            echo "Assinando com chave permanente..."
+            $APKSIGNER sign --ks eletro.keystore --ks-pass "pass:eletro123" --ks-key-alias "eletro" --key-pass "pass:eletro123" --out $CM_EXPORT_DIR/eletro-heinzen.apk "$APK_GERADO"
+          fi
+          
+          # Apaga os APKs nao assinados para nao aparecerem na lista
+          find android/app/build -name "*.apk" -delete 2>/dev/null || true
+    artifacts:
+      - eletro-heinzen.apk
+    publishing:
+      email:
+        recipients:
+          - ELETROHEINZEN@GMAIL.COM
+        notify:
+          success: true

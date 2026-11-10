@@ -1,0 +1,74 @@
+name: Compilar APK Eletro Heinzen
+
+on:
+  workflow_dispatch: # Compila manualmente ao clicar no botão
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar o Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Configurar o Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 1. Gerar Pasta Android (estrutura limpa)
+        run: flutter create . --platforms=android
+
+      - name: 2. Injetar google-services.json, Chave Fixa e Plugins
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          CHAVE_FIXA: ${{ secrets.CHAVE_FIXA }}
+        run: |
+          # 1. Cria o google-services.json
+          echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
+          # 2. Cria a chave fixa em ambos os locais para garantir assinatura idêntica
+          mkdir -p ~/.android
+          echo "$CHAVE_FIXA" | base64 --decode > ~/.android/debug.keystore
+          echo "$CHAVE_FIXA" | base64 --decode > android/app/debug.keystore
+
+          # 3. Força o Gradle a usar a chave fixa no build Release
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i '/signingConfigs {/a \        getByName("debug") { storeFile = file("debug.keystore") }' android/app/build.gradle.kts
+          elif [ -f "android/app/build.gradle" ]; then
+            sed -i '/signingConfigs {/a \        debug { storeFile file("debug.keystore") }' android/app/build.gradle
+          fi
+
+          # 4. Aplica o plugin do Google Services
+          if [ -f "android/settings.gradle.kts" ]; then
+            sed -i '/plugins {/a \    id("com.google.gms.google-services") version "4.4.2" apply false' android/settings.gradle.kts
+            sed -i '/plugins {/a \    id("com.google.gms.google-services")' android/app/build.gradle.kts
+          elif [ -f "android/settings.gradle" ]; then
+            sed -i '/plugins {/a \    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
+            sed -i '/plugins {/a \    id "com.google.gms.google-services"' android/app/build.gradle
+          else
+            sed -i "/dependencies {/a \        classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
+            echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
+          fi
+
+      - name: 3. Instalar Dependências e Plugins
+        run: flutter pub get
+
+      - name: 4. Aplicar Ícone Oficial do App
+        run: dart run flutter_launcher_icons
+
+      - name: 5. Compilar o APK Release Versionado
+        run: flutter build apk --release --build-number=${{ github.run_number }}
+
+      - name: 6. Disponibilizar APK para Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-eletro-heinzen-v${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/*.apk

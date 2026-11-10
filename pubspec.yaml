@@ -1,0 +1,38 @@
+name: eletro_heinzen
+description: "App de Campo e Faturamento - Eletro Heinzen"
+publish_to: "none"
+version: 1.0.1+2
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.8.0
+  pdf: ^3.11.1
+  share_plus: ^10.1.2
+  path_provider: ^2.1.2
+  intl: ^0.19.0
+  image_picker: ^1.1.2
+  onesignal_flutter: ^5.2.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - icone_chat.png
+    - icone.png
+    - fundo.png
+    - cabecalho.png
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "icone.png"
