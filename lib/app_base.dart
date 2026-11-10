@@ -19,11 +19,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 const String supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
-  defaultValue: 'https://frwkzyxmqrvbnpqvgxtm.supabase.co',
+  defaultValue: 'https://rpcptrpczzdrrbquabnh.supabase.co',
 );
 const String supabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: 'sb_publishable_BTKwUTL5F_e6CiilAoyNLw_bXyF9mzQ',
+  defaultValue: 'sb_publishable_cXRSmhxE7YGoCdK0WMonRg_MB2a5zAp',
 );
 
 SupabaseClient get supabase => Supabase.instance.client;
@@ -1924,4 +1924,5 @@ class PdfEngine {
     return file;
   }
 }
+
 
