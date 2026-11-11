@@ -189,6 +189,31 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     );
   }
 
+  void _limparCampos() {
+    setState(() {
+      _clienteAtual = null;
+      _destaqueCtrl.clear();
+      _obsCtrl.clear();
+      _laudoCampoCtrl.clear();
+      _dataDocCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+      _itens.clear();
+      _equipamentos.clear();
+      _fotos.clear();
+      _idServicoFaturamentoOrigem = null;
+      _idOrcamentoEditando = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: corCianoEletrico,
+        content: Text(
+          '✨ Todos os campos foram limpos para um novo documento!',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
@@ -988,6 +1013,31 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
     );
   }
 
+  void _limparCampos() {
+    setState(() {
+      _clienteAtual = null;
+      _destaqueCtrl.clear();
+      _obsCtrl.clear();
+      _laudoCampoCtrl.clear();
+      _dataDocCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+      _itens.clear();
+      _equipamentos.clear();
+      _fotos.clear();
+      _idServicoFaturamentoOrigem = null;
+      _idOrcamentoEditando = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: corCianoEletrico,
+        content: Text(
+          '✨ Todos os campos foram limpos para um novo documento!',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
@@ -1000,6 +1050,26 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
           BannerOSPrime(
             subtituloTela: isRecibo ? 'Emissão de Recibo' : 'Emissão de Orçamento',
             exibirBotaoVoltar: true,
+            acaoDireita: InkWell(
+              onTap: _limparCampos,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amber.withOpacity(0.7), width: 1),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.cleaning_services_rounded, color: Colors.amber, size: 13),
+                    SizedBox(width: 4),
+                    Text('Limpar', style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
           ),
           Expanded(
             child: SingleChildScrollView(
