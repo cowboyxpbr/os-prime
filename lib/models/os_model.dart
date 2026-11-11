@@ -1,4 +1,5 @@
-﻿import 'dart:convert';
+﻿import '../app_base.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -18,6 +19,7 @@ class OrdemServico {
   String? dataConclusao;
   String? observacaoTecnico;
   bool visualizadoPeloTecnico;
+  List<EquipamentoRelatorio> equipamentos;
 
   OrdemServico({
     this.id,
@@ -33,7 +35,8 @@ class OrdemServico {
     this.dataConclusao,
     this.observacaoTecnico,
     this.visualizadoPeloTecnico = false,
-  });
+    List<EquipamentoRelatorio>? equipamentos,
+  }) : equipamentos = equipamentos ?? [];
 
   Map<String, dynamic> toMap() => {
     if (id != null) 'id': id,
@@ -49,23 +52,48 @@ class OrdemServico {
     'data_conclusao': dataConclusao ?? '',
     'observacao_tecnico': observacaoTecnico ?? '',
     'visualizado_pelo_tecnico': visualizadoPeloTecnico,
+    'equipamentos': jsonEncode(equipamentos.map((e) => {
+      'tipo': e.tipo,
+      'marca': e.marca,
+      'modelo': e.modelo,
+      'potencia': e.potencia,
+      'tensao': e.tensao,
+    }).toList()),
   };
 
-  factory OrdemServico.fromMap(Map<String, dynamic> m) => OrdemServico(
-    id: m['id']?.toString(),
-    numeroOS: (m['numero_os'] ?? '').toString(),
-    cliente: m['cliente'] ?? '',
-    telefone: m['telefone'] ?? '',
-    endereco: m['endereco'] ?? '',
-    descricaoProblema: m['descricao_problema'] ?? '',
-    tecnicoDesignado: (m['tecnico_designado'] ?? '').toString().trim().toLowerCase(),
-    status: m['status'] ?? 'Pendente',
-    prioridade: m['prioridade'] ?? 'Normal',
-    dataAbertura: m['data_abertura'] ?? DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
-    dataConclusao: m['data_conclusao'],
-    observacaoTecnico: m['observacao_tecnico'],
-    visualizadoPeloTecnico: m['visualizado_pelo_tecnico'] == true,
-  );
+  factory OrdemServico.fromMap(Map<String, dynamic> m) {
+    List<EquipamentoRelatorio> eqs = [];
+    if (m['equipamentos'] != null) {
+      try {
+        final raw = m['equipamentos'];
+        final List list = raw is String ? jsonDecode(raw) : raw;
+        eqs = list.map((e) => EquipamentoRelatorio(
+          tipo: (e['tipo'] ?? '').toString(),
+          marca: (e['marca'] ?? '').toString(),
+          modelo: (e['modelo'] ?? '').toString(),
+          potencia: (e['potencia'] ?? '').toString(),
+          tensao: (e['tensao'] ?? '').toString(),
+        )).toList();
+      } catch (_) {}
+    }
+
+    return OrdemServico(
+      id: m['id']?.toString(),
+      numeroOS: (m['numero_os'] ?? '').toString(),
+      cliente: m['cliente'] ?? '',
+      telefone: m['telefone'] ?? '',
+      endereco: m['endereco'] ?? '',
+      descricaoProblema: m['descricao_problema'] ?? '',
+      tecnicoDesignado: (m['tecnico_designado'] ?? '').toString().trim().toLowerCase(),
+      status: m['status'] ?? 'Pendente',
+      prioridade: m['prioridade'] ?? 'Normal',
+      dataAbertura: m['data_abertura'] ?? DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
+      dataConclusao: m['data_conclusao'],
+      observacaoTecnico: m['observacao_tecnico'],
+      visualizadoPeloTecnico: m['visualizado_pelo_tecnico'] == true,
+      equipamentos: eqs,
+    );
+  }
 }
 
 class ServicoOS {
@@ -112,15 +140,29 @@ class ServicoOS {
     required dynamic id,
     required String novoStatus,
     String? relatorioTecnico,
+    List<EquipamentoRelatorio>? equipamentos,
   }) async {
     final dadosUpdate = <String, dynamic>{
       'status': novoStatus,
       'visualizado_pelo_tecnico': true,
     };
 
-    if (novoStatus == 'Concluída') {
+    if (relatorioTecnico != null && relatorioTecnico.isNotEmpty) {
+      dadosUpdate['observacao_tecnico'] = relatorioTecnico;
+    }
+
+    if (equipamentos != null) {
+      dadosUpdate['equipamentos'] = jsonEncode(equipamentos.map((e) => {
+        'tipo': e.tipo,
+        'marca': e.marca,
+        'modelo': e.modelo,
+        'potencia': e.potencia,
+        'tensao': e.tensao,
+      }).toList());
+    }
+
+    if (novoStatus == 'Concluída' || novoStatus == 'Aguardando Orçamento') {
       dadosUpdate['data_conclusao'] = DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now());
-      if (relatorioTecnico != null) dadosUpdate['observacao_tecnico'] = relatorioTecnico;
     }
 
     try {

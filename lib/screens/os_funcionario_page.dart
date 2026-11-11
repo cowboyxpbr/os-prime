@@ -209,8 +209,69 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
     );
   }
 
-  // FINALIZAÇÃO PELO TÉCNICO (MANDA DIRETO P/ A TELA "LANÇAR COM PREÇO" DO ESCRITÓRIO)
-  void _modalFinalizarOS(OrdemServico os, {required bool enviarAoEscritorio}) {
+  void _modalAdicionarEquipamento(OrdemServico os) {
+    final tipoC = TextEditingController();
+    final marcaC = TextEditingController();
+    final modeloC = TextEditingController();
+    final potenciaC = TextEditingController();
+    final tensaoC = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: corCardFundo,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
+        title: const Text('⚙️ Adicionar Equipamento', style: TextStyle(color: corCianoEletrico, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: tipoC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Tipo (Ex: Motobomba, Inversor, Sauna) *', isDense: true)),
+              const SizedBox(height: 8),
+              TextField(controller: marcaC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Marca (Ex: Dancor, WEG, Jacuzzi)', isDense: true)),
+              const SizedBox(height: 8),
+              TextField(controller: modeloC, decoration: const InputDecoration(labelText: 'Modelo', isDense: true)),
+              const SizedBox(height: 8),
+              TextField(controller: potenciaC, decoration: const InputDecoration(labelText: 'Potência (Ex: 1.5 CV, 2.0 HP)', isDense: true)),
+              const SizedBox(height: 8),
+              TextField(controller: tensaoC, decoration: const InputDecoration(labelText: 'Tensão (Ex: 220V Bifásico, 380V)', isDense: true)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
+            child: const Text('Adicionar', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              final t = tipoC.text.trim();
+              if (t.isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('Informe o tipo de equipamento!')));
+                return;
+              }
+              final novoEq = EquipamentoRelatorio(
+                tipo: t,
+                marca: marcaC.text.trim(),
+                modelo: modeloC.text.trim(),
+                potencia: potenciaC.text.trim(),
+                tensao: tensaoC.text.trim(),
+              );
+
+              setState(() {
+                os.equipamentos.add(novoEq);
+              });
+
+              await ServicoOS.atualizarStatus(id: os.id, novoStatus: os.status, equipamentos: os.equipamentos);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // FINALIZAÇÃO PELO TÉCNICO (ORÇAMENTO OU CONCLUSÃO DIRETA)
+  void _modalFinalizarOS(OrdemServico os, {required bool paraOrcamento}) {
     final relatorioC = TextEditingController();
 
     showDialog(
@@ -219,16 +280,16 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
         backgroundColor: corCardFundo,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: enviarAoEscritorio ? corVerdeWhats : corCianoSuave),
+          side: BorderSide(color: paraOrcamento ? Colors.amberAccent : corVerdeWhats),
         ),
         title: Row(
           children: [
-            Icon(enviarAoEscritorio ? Icons.send_rounded : Icons.check_circle, color: enviarAoEscritorio ? corVerdeWhats : corCianoSuave, size: 22),
+            Icon(paraOrcamento ? Icons.receipt_long : Icons.check_circle, color: paraOrcamento ? Colors.amberAccent : corVerdeWhats, size: 22),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                enviarAoEscritorio ? 'Concluir & Enviar Escritório' : 'Concluir O.S. Interna',
-                style: TextStyle(color: enviarAoEscritorio ? corVerdeWhats : corCianoSuave, fontSize: 15, fontWeight: FontWeight.bold),
+                paraOrcamento ? 'Enviar p/ Orçamento Escritório' : 'Finalizar O.S. em Campo',
+                style: TextStyle(color: paraOrcamento ? Colors.amberAccent : corVerdeWhats, fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -277,22 +338,24 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: enviarAoEscritorio ? corVerdeWhats : corCianoEletrico,
-              foregroundColor: enviarAoEscritorio ? Colors.white : Colors.black,
+              backgroundColor: paraOrcamento ? Colors.amber : corVerdeWhats,
+              foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             ),
-            child: Text(enviarAoEscritorio ? 'Finalizar e Enviar' : 'Apenas Concluir'),
+            child: Text(paraOrcamento ? 'Enviar para Orçamento' : 'Finalizar O.S.', style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               if (relatorioC.text.trim().isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Preencha o relatório do serviço!')));
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Preencha o relatório / laudo técnico!')));
                 return;
               }
               final relatorio = relatorioC.text.trim();
 
+              final statusNovo = paraOrcamento ? 'Aguardando Orçamento' : 'Concluída';
               await ServicoOS.atualizarStatus(
                 id: os.id,
-                novoStatus: 'Concluída',
+                novoStatus: statusNovo,
                 relatorioTecnico: relatorio,
+                equipamentos: os.equipamentos,
               );
 
               if (ctx.mounted) Navigator.pop(ctx);
@@ -444,24 +507,64 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                                 ),
                               ),
 
-                            // CASO 2: SE EM ANDAMENTO -> CONCLUIR E ENVIAR
+                            // SEÇÃO DE EQUIPAMENTOS NA O.S. DO TÉCNICO
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text("Equipamentos ():", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corCianoEletrico)),
+                                if (!concluida)
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: corCianoEletrico,
+                                      foregroundColor: Colors.black,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    ),
+                                    icon: const Icon(Icons.add, size: 13),
+                                    label: const Text('Equipamento', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _modalAdicionarEquipamento(os),
+                                  ),
+                              ],
+                            ),
+                            if (os.equipamentos.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                children: os.equipamentos.map((eq) => Chip(
+                                  backgroundColor: corCardFundo,
+                                  side: const BorderSide(color: corCianoSuave, width: 0.8),
+                                  label: Text(" -  ", style: const TextStyle(fontSize: 10, color: corTextoClaro)),
+                                  deleteIcon: !concluida ? const Icon(Icons.close, size: 12, color: Colors.redAccent) : null,
+                                  onDeleted: !concluida ? () async {
+                                    setState(() {
+                                      os.equipamentos.remove(eq);
+                                    });
+                                    await ServicoOS.atualizarStatus(id: os.id, novoStatus: os.status, equipamentos: os.equipamentos);
+                                  } : null,
+                                )).toList(),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+
+                            // CASO 2: SE EM ANDAMENTO -> ENVIAR P/ ORÇAMENTO OU FINALIZAR
                             if (emAndamento)
                               Row(
                                 children: [
                                   Expanded(
                                     child: SizedBox(
                                       height: 38,
-                                      child: OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: corCianoSuave),
-                                          foregroundColor: corCianoSuave,
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.amber.shade700,
+                                          foregroundColor: Colors.white,
                                           visualDensity: VisualDensity.compact,
                                           padding: const EdgeInsets.symmetric(horizontal: 4),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                         ),
-                                        icon: const Icon(Icons.check, size: 15),
-                                        label: const Text('Apenas Concluir', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                        onPressed: () => _modalFinalizarOS(os, enviarAoEscritorio: false),
+                                        icon: const Icon(Icons.receipt_long, size: 14),
+                                        label: const Text('Enviar p/ Orçamento', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                        onPressed: () => _modalFinalizarOS(os, paraOrcamento: true),
                                       ),
                                     ),
                                   ),
@@ -477,9 +580,9 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                                           padding: const EdgeInsets.symmetric(horizontal: 4),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                         ),
-                                        icon: const Icon(Icons.send_rounded, size: 14),
-                                        label: const Text('Enviar ao Escritório', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                        onPressed: () => _modalFinalizarOS(os, enviarAoEscritorio: true),
+                                        icon: const Icon(Icons.check_circle, size: 14),
+                                        label: const Text('Finalizar O.S.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                        onPressed: () => _modalFinalizarOS(os, paraOrcamento: false),
                                       ),
                                     ),
                                   ),

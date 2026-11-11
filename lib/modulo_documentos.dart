@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO: ORÇAMENTOS COM DATA FLEXÍVEL, EQUIPAMENTOS, LAUDO E HISTÓRICO 90 DIAS
 // lib/modulo_documentos.dart
 // ============================================================================
@@ -734,6 +734,177 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
     );
   }
 
+  // ==========================================================================
+  // PARTE 2.3: PUXAR O.S. AGUARDANDO ORÇAMENTO E PREENCHER COM 1 CLIQUE
+  // ==========================================================================
+  void _modalPuxarDaOS() async {
+    List<Map<String, dynamic>> pendentes = [];
+    try {
+      final res = await supabase
+          .from('ordens_servico')
+          .select()
+          .order('id', ascending: false)
+          .timeout(const Duration(seconds: 4));
+      pendentes = List<Map<String, dynamic>>.from(res)
+          .where((s) => (s['status'] ?? '').toString().trim() == 'Aguardando Orçamento')
+          .toList();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: corCardFundo,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: Colors.amber),
+      ),
+      builder: (ctx) {
+        String f = '';
+        return StatefulBuilder(
+          builder: (ctx, setS) {
+            final filtrados = pendentes.where((s) {
+              final c = (s['cliente'] ?? '').toString().toLowerCase();
+              final n = (s['numero_os'] ?? '').toString().toLowerCase();
+              final t = (s['tecnico_designado'] ?? '').toString().toLowerCase();
+              final p = (s['descricao_problema'] ?? '').toString().toLowerCase();
+              return c.contains(f) || n.contains(f) || t.contains(f) || p.contains(f);
+            }).toList();
+
+            return Container(
+              padding: const EdgeInsets.all(14),
+              height: MediaQuery.of(context).size.height * 0.75,
+              child: Column(
+                children: [
+                  const Text('\u{1F4E5} Puxar O.S. Aguardando Orçamento',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amber)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search, color: Colors.amber, size: 18),
+                      hintText: 'Pesquisar cliente, Nº da O.S. ou técnico...',
+                      isDense: true,
+                    ),
+                    onChanged: (v) => setS(() => f = v.toLowerCase()),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: filtrados.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Nenhuma O.S. "Aguardando Orçamento" encontrada.',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: filtrados.length,
+                            itemBuilder: (_, i) {
+                              final s = filtrados[i];
+                              final numOS = s['numero_os'] ?? 'S/N';
+                              final cliente = s['cliente'] ?? 'Sem Nome';
+                              final laudo = (s['observacao_tecnico'] != null && s['observacao_tecnico'].toString().trim().isNotEmpty)
+                                  ? s['observacao_tecnico'].toString().trim()
+                                  : (s['descricao_problema'] ?? '');
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(color: Colors.amber.withOpacity(0.35)),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    "O.S. #$numOS • $cliente",
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corTextoClaro),
+                                  ),
+                                  subtitle: Text(
+                                    "Técnico: ${s['tecnico_designado'] ?? 'Técnico'}\nLaudo: $laudo",
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.grey, fontSize: 11),
+                                  ),
+                                  trailing: const Icon(Icons.touch_app, color: Colors.amber, size: 18),
+                                  onTap: () async {
+                                    String doc = (s['cpf_cnpj'] ?? s['documento'] ?? '').toString();
+                                    if (doc.isEmpty && cliente.isNotEmpty) {
+                                      try {
+                                        final cli = await supabase
+                                            .from('clientes')
+                                            .select('cpf, cnpj, documento')
+                                            .eq('nome', cliente)
+                                            .maybeSingle();
+                                        if (cli != null) {
+                                          doc = (cli['documento'] ?? cli['cpf'] ?? cli['cnpj'] ?? '').toString();
+                                        }
+                                      } catch (_) {}
+                                    }
+
+                                    final List<EquipamentoRelatorio> novosEquips = [];
+                                    if (s['equipamentos'] != null) {
+                                      var raw = s['equipamentos'];
+                                      if (raw is String) {
+                                        try {
+                                          raw = jsonDecode(raw);
+                                        } catch (_) {
+                                          raw = [];
+                                        }
+                                      }
+                                      if (raw is List) {
+                                        for (var itemEq in raw) {
+                                          if (itemEq is Map) {
+                                            novosEquips.add(EquipamentoRelatorio.fromMap(Map<String, dynamic>.from(itemEq)));
+                                          }
+                                        }
+                                      }
+                                    }
+
+                                    setState(() {
+                                      _clienteAtual = DadosCliente(
+                                        nome: cliente,
+                                        telefone: s['telefone'] ?? '',
+                                        documento: doc,
+                                        endereco: s['endereco'] ?? '',
+                                      );
+                                      _destaqueCtrl.text = "ORÇAMENTO REF. O.S. Nº $numOS";
+                                      _obsCtrl.text = laudo;
+                                      _equipamentos.clear();
+                                      _equipamentos.addAll(novosEquips);
+                                    });
+
+                                    try {
+                                      await supabase
+                                          .from('ordens_servico')
+                                          .update({'status': 'Orçada'})
+                                          .eq('id', s['id']);
+                                    } catch (_) {}
+
+                                    if (ctx.mounted) Navigator.pop(ctx);
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          backgroundColor: Colors.green,
+                                          content: Text('\u2705 O.S. #$numOS importada e travada como "Orçada"!'),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _modalNovoClienteRapido() {
     final n = TextEditingController(), r = TextEditingController(), f = TextEditingController();
     final d = TextEditingController(), m = TextEditingController(), e = TextEditingController();
@@ -1080,6 +1251,20 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
                                 icon: const Icon(Icons.cloud_download, size: 14),
                                 label: const Text('Puxar Faturamento', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                 onPressed: _modalPuxarDoFaturamento,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            if (!isRecibo) ...[
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.amber.shade700,
+                                  foregroundColor: Colors.black,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.assignment_returned, size: 14),
+                                label: const Text('\u{1F4E5} Puxar da O.S.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                onPressed: _modalPuxarDaOS,
                               ),
                               const SizedBox(width: 6),
                             ],
