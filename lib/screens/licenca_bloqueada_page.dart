@@ -60,7 +60,7 @@ class _LicencaBloqueadaPageState extends State<LicencaBloqueadaPage> {
             );
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (_) => MenuPrincipalPage(usuarioLogado: widget.usuarioLogado)),
+              MaterialPageRoute(builder: (_) => TelaMenuPrincipal(usuarioLogado: widget.usuarioLogado)),
             );
           }
           return;
@@ -110,7 +110,7 @@ class _LicencaBloqueadaPageState extends State<LicencaBloqueadaPage> {
             );
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (_) => MenuPrincipalPage(usuarioLogado: widget.usuarioLogado)),
+              MaterialPageRoute(builder: (_) => TelaMenuPrincipal(usuarioLogado: widget.usuarioLogado)),
             );
           }
           return;
