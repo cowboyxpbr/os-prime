@@ -21,6 +21,7 @@ import 'os_funcionario_page.dart';
 import 'relatorio_condominio_page.dart';
 import 'historico_funcionario_page.dart';
 import 'menu_telas_auxiliares.dart';
+import 'dados_empresa_page.dart';
 
 // HELPER: DISPARADOR DIRETO DO WHATSAPP
 Future<void> _abrirWhatsApp(String telefone, {String mensagem = ''}) async {
@@ -847,25 +848,56 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
             subtituloTela: isMaster
                 ? "Painel Master - Direção Geral"
                 : (isSenior ? "Painel Sênior - Gestão Operacional" : "Área do Técnico de Campo"),
-            acaoDireita: InkWell(
-              onTap: _sair,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.18),
+            acaoDireita: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DadosEmpresaPage()),
+                    );
+                  },
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.7), width: 1),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: corCianoEletrico.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: corCianoEletrico.withOpacity(0.7), width: 1),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.business, color: corCianoEletrico, size: 13),
+                        SizedBox(width: 4),
+                        Text('Empresa', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.logout, color: Colors.redAccent, size: 13),
-                    SizedBox(width: 4),
-                    Text('Sair', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                  ],
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: _sair,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.7), width: 1),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.logout, color: Colors.redAccent, size: 13),
+                        SizedBox(width: 4),
+                        Text('Sair', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
 
@@ -1361,5 +1393,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
     );
   }
 }
+
 
 

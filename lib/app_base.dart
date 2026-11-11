@@ -950,7 +950,52 @@ class PdfEngine {
     return '$prefixo-$ano-$hash';
   }
 
+  static Map<String, dynamic>? dadosEmpresaAtual;
+  static pw.MemoryImage? logoEmpresaBytes;
+
+  static Future<void> carregarDadosEmpresaParaPdf() async {
+    try {
+      final res = await supabase.from('empresas').select().limit(1).maybeSingle();
+      if (res != null) {
+        dadosEmpresaAtual = res;
+        final logoUrl = (res['logo_url'] ?? '').toString();
+        if (logoUrl.isNotEmpty) {
+          try {
+            final nomeArquivo = logoUrl.split('/').last.split('?').first;
+            final bytes = await supabase.storage.from('logos_empresas').download(nomeArquivo);
+            if (bytes.isNotEmpty) {
+              logoEmpresaBytes = pw.MemoryImage(bytes);
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   static pw.Widget _construirCabecalhoEmpresa() {
+    final nome = (dadosEmpresaAtual?['nome']?.toString().trim().isNotEmpty == true)
+        ? dadosEmpresaAtual!['nome'].toString().trim()
+        : 'O.S. PRIME';
+
+    final ramo = (dadosEmpresaAtual?['ramo_atividade']?.toString().trim().isNotEmpty == true)
+        ? dadosEmpresaAtual!['ramo_atividade'].toString().trim()
+        : 'Comandos Elétricos • Climatização • Manutenção Especializada';
+
+    final cnpj = dadosEmpresaAtual?['cnpj_cpf']?.toString().trim() ?? '';
+    final endereco = dadosEmpresaAtual?['endereco']?.toString().trim() ?? '';
+    final fone = dadosEmpresaAtual?['telefone']?.toString().trim() ?? '';
+    final whats = dadosEmpresaAtual?['whatsapp']?.toString().trim() ?? '';
+
+    final List<String> linha1Partes = [];
+    if (cnpj.isNotEmpty) linha1Partes.add('CNPJ/CPF: $cnpj');
+    if (endereco.isNotEmpty) linha1Partes.add(endereco);
+    final linha1 = linha1Partes.join(' | ');
+
+    final List<String> linha2Partes = [];
+    if (fone.isNotEmpty) linha2Partes.add('Fone: $fone');
+    if (whats.isNotEmpty) linha2Partes.add('WhatsApp: $whats');
+    final linha2 = linha2Partes.join(' | ');
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 8),
       decoration: const pw.BoxDecoration(
@@ -959,55 +1004,69 @@ class PdfEngine {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.Container(
-            width: 58,
-            height: 48,
-            decoration: pw.BoxDecoration(
-              color: _corAzulMarinho,
-              borderRadius: pw.BorderRadius.circular(6),
-            ),
-            alignment: pw.Alignment.center,
-            child: pw.Text(
-              'EH',
-              style: pw.TextStyle(
-                color: PdfColors.white,
-                fontSize: 26,
-                fontWeight: pw.FontWeight.bold,
+          if (logoEmpresaBytes != null)
+            pw.Container(
+              width: 58,
+              height: 48,
+              child: pw.Image(logoEmpresaBytes!, fit: pw.BoxFit.contain),
+            )
+          else
+            pw.Container(
+              width: 58,
+              height: 48,
+              decoration: pw.BoxDecoration(
+                color: _corAzulMarinho,
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              alignment: pw.Alignment.center,
+              child: pw.Text(
+                'OSP',
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 20,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ),
-          ),
           pw.SizedBox(width: 12),
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'O.S. PRIME',
+                  nome,
                   style: pw.TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: pw.FontWeight.bold,
                     color: _corAzulMarinho,
                     letterSpacing: 0.5,
                   ),
                 ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'Comandos Elétricos • Motobombas • Saunas • Aquecedores • SPA',
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _corCiano,
+                if (ramo.isNotEmpty) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    ramo,
+                    style: pw.TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: _corCiano,
+                    ),
                   ),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'CNPJ: 25.454.483/0001-25 | Rua São Pedro, 234 - Perequê, Porto Belo - SC',
-                  style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
-                ),
-                pw.Text(
-                  'Fone: (47) 3050-7931 | Cel/WhatsApp: (47) 98455-3301 (Plantão)',
-                  style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
-                ),
+                ],
+                if (linha1.isNotEmpty) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    linha1,
+                    style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
+                  ),
+                ],
+                if (linha2.isNotEmpty) ...[
+                  pw.SizedBox(height: 1),
+                  pw.Text(
+                    linha2,
+                    style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1085,9 +1144,10 @@ class PdfEngine {
     String? tecnico,
     dynamic dados,
   }) async {
+    await carregarDadosEmpresaParaPdf();
     final pdf = pw.Document();
     final tipoDocumento = (tipoDoc ?? 'ORÇAMENTO').toUpperCase();
-    final codigoAutenticidade = _gerarCodigoAutenticidade('EH');
+    final codigoAutenticidade = _gerarCodigoAutenticidade('OSP');
     final dataEmissaoFormatada = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
     String nomeCli = '';
@@ -1513,8 +1573,9 @@ class PdfEngine {
   }
 
   static Future<File> gerarPdfRelatorioCompleto(RelatorioCondominioModel r) async {
+    await carregarDadosEmpresaParaPdf();
     final pdf = pw.Document();
-    final codigoLaudo = _gerarCodigoAutenticidade('EH-REL');
+    final codigoLaudo = _gerarCodigoAutenticidade('OSP-REL');
     final dataEmissaoTexto = r.dataEmissao.isNotEmpty
         ? r.dataEmissao
         : DateFormat('dd/MM/yyyy - HH:mm').format(DateTime.now());
@@ -1824,6 +1885,7 @@ class PdfEngine {
     dynamic usuarioLogado,
     dynamic filtroData,
   }) async {
+    await carregarDadosEmpresaParaPdf();
     final pdf = pw.Document();
     final dataEmissaoTexto = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
@@ -1924,6 +1986,7 @@ class PdfEngine {
     return file;
   }
 }
+
 
 
 
