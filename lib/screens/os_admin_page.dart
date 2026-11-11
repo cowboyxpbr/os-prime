@@ -349,6 +349,109 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     }
   }
 
+  void _cadastrarNovoClienteParaOS(
+    TextEditingController cC,
+    TextEditingController eC,
+    TextEditingController fC,
+    StateSetter setM,
+  ) {
+    final nomeCtrl = TextEditingController();
+    final foneCtrl = TextEditingController();
+    final endCtrl = TextEditingController();
+    final docCtrl = TextEditingController();
+    bool salvando = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: corCardFundo,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: corCianoEletrico),
+          ),
+          title: const Text('👤 Cadastrar Novo Cliente', style: TextStyle(color: corCianoEletrico, fontSize: 16, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nomeCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Nome do Cliente / Condomínio *', isDense: true)),
+                const SizedBox(height: 8),
+                TextField(controller: foneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone / WhatsApp *', isDense: true)),
+                const SizedBox(height: 8),
+                TextField(controller: endCtrl, decoration: const InputDecoration(labelText: 'Endereço Completo', isDense: true)),
+                const SizedBox(height: 8),
+                TextField(controller: docCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'CPF ou CNPJ (Opcional)', isDense: true)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: salvando ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
+              onPressed: salvando ? null : () async {
+                final nome = nomeCtrl.text.trim();
+                final fone = foneCtrl.text.trim();
+                final endereco = endCtrl.text.trim();
+                final doc = docCtrl.text.trim();
+
+                if (nome.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('Informe o nome do cliente.')));
+                  return;
+                }
+
+                setDialogState(() => salvando = true);
+                try {
+                  final payload = {
+                    'nome': nome,
+                    'telefone': fone,
+                    'endereco': endereco,
+                    'cpf_cnpj': doc,
+                    'documento': doc,
+                  };
+
+                  final res = await supabase.from('clientes').insert(payload).select().maybeSingle().timeout(const Duration(seconds: 5));
+                  final novo = DadosCliente(
+                    id: res != null ? res['id'] : null,
+                    nome: nome,
+                    telefone: fone,
+                    endereco: endereco,
+                    documento: doc,
+                  );
+
+                  final listaAtual = await CacheOffline.carregarClientesLocal();
+                  listaAtual.add(novo);
+                  await CacheOffline.salvarClientesLocal(listaAtual);
+
+                  setM(() {
+                    cC.text = nome;
+                    fC.text = fone;
+                    eC.text = endereco;
+                  });
+
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('✅ Cliente cadastrado e vinculado à O.S.!')));
+                  }
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao cadastrar: ')));
+                  }
+                } finally {
+                  if (ctx.mounted) setDialogState(() => salvando = false);
+                }
+              },
+              child: salvando ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)) : const Text('Salvar e Usar', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _buscarClientesParaOS(
     TextEditingController cC,
     TextEditingController eC,
@@ -441,16 +544,33 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Dados do Cliente', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: corCianoEletrico),
-                          foregroundColor: corCianoEletrico,
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        ),
-                        icon: const Icon(Icons.search, size: 14),
-                        label: const Text('Buscar Cadastrado', style: TextStyle(fontSize: 11)),
-                        onPressed: () => _buscarClientesParaOS(cC, eC, fC, setM),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: corCianoEletrico),
+                              foregroundColor: corCianoEletrico,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            ),
+                            icon: const Icon(Icons.search, size: 13),
+                            label: const Text('Buscar', style: TextStyle(fontSize: 10.5)),
+                            onPressed: () => _buscarClientesParaOS(cC, eC, fC, setM),
+                          ),
+                          const SizedBox(width: 5),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: corCianoEletrico,
+                              foregroundColor: Colors.black,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            ),
+                            icon: const Icon(Icons.person_add, size: 13),
+                            label: const Text('Cadastrar', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            onPressed: () => _cadastrarNovoClienteParaOS(cC, eC, fC, setM),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -591,16 +711,33 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Dados do Cliente', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: corCianoEletrico),
-                          foregroundColor: corCianoEletrico,
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        ),
-                        icon: const Icon(Icons.search, size: 14),
-                        label: const Text('Buscar Cadastrado', style: TextStyle(fontSize: 11)),
-                        onPressed: () => _buscarClientesParaOS(cC, eC, fC, setM),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: corCianoEletrico),
+                              foregroundColor: corCianoEletrico,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            ),
+                            icon: const Icon(Icons.search, size: 13),
+                            label: const Text('Buscar', style: TextStyle(fontSize: 10.5)),
+                            onPressed: () => _buscarClientesParaOS(cC, eC, fC, setM),
+                          ),
+                          const SizedBox(width: 5),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: corCianoEletrico,
+                              foregroundColor: Colors.black,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            ),
+                            icon: const Icon(Icons.person_add, size: 13),
+                            label: const Text('Cadastrar', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            onPressed: () => _cadastrarNovoClienteParaOS(cC, eC, fC, setM),
+                          ),
+                        ],
                       ),
                     ],
                   ),
