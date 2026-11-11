@@ -82,7 +82,7 @@ class _TelaChatState extends State<TelaChat> {
   }
 
   Future<void> _carregarUsuario() async {
-    _limparMensagensAntigas48h();
+    Future.delayed(const Duration(seconds: 5), () => _limparMensagensAntigas48h());
 
     if (widget.usuarioLogado != null) {
       _usuario = widget.usuarioLogado;
@@ -181,7 +181,7 @@ class _TelaListaContatosChatState extends State<TelaListaContatosChat> {
                 .from('mensagens_chat')
                 .stream(primaryKey: ['id'])
                 .order('id', ascending: false)
-                .limit(300),
+                .limit(80),
             builder: (context, msgSnap) {
               final todasMsgs = msgSnap.data ?? [];
 
@@ -717,7 +717,7 @@ class _TelaConversaPrivadaState extends State<TelaConversaPrivada> {
                   .from('mensagens_chat')
                   .stream(primaryKey: ['id'])
                   .order('created_at', ascending: false)
-                  .limit(250),
+                  .limit(80),
               builder: (context, snapshot) {
                 final todas = snapshot.data ?? [];
 
