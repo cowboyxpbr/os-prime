@@ -22,6 +22,7 @@ import 'relatorio_condominio_page.dart';
 import 'historico_funcionario_page.dart';
 import 'menu_telas_auxiliares.dart';
 import 'dados_empresa_page.dart';
+import 'licenca_bloqueada_page.dart';
 
 // HELPER: DISPARADOR DIRETO DO WHATSAPP
 Future<void> _abrirWhatsApp(String telefone, {String mensagem = ''}) async {
@@ -57,9 +58,39 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
     super.initState();
     _sincronizar();
     _iniciarVigilanteSessao();
+    _verificarLicenca();
   }
 
   @override
+
+  Future<void> _verificarLicenca() async {
+    try {
+      final res = await supabase.from('empresas').select().limit(1).maybeSingle();
+      if (res != null) {
+        final status = (res['status'] ?? 'ativo').toString().toLowerCase();
+        final validadeStr = res['validade']?.toString();
+        DateTime? validade;
+        if (validadeStr != null) {
+          validade = DateTime.tryParse(validadeStr);
+        }
+        final agora = DateTime.now();
+        final expirado = (validade != null && agora.isAfter(validade)) || status == 'bloqueado';
+
+        if (expirado && mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => LicencaBloqueadaPage(
+                dadosEmpresa: res,
+                usuarioLogado: widget.usuarioLogado,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
   void dispose() {
     _vigilanteSessaoSub?.cancel();
     super.dispose();
