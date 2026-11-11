@@ -637,7 +637,8 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
         destaque: _destaqueCtrl.text,
         itens: _itens,
         obs: '${_obsCtrl.text.trim()}\nData de Emissão: ${_dataDocCtrl.text.trim()}'.trim(),
-        laudoDescritivo: _prepararLaudoComEquipamentos(),
+        laudoDescritivo: _laudoCampoCtrl.text.trim(),
+        equipamentos: _equipamentos,
         fotos: _fotos,
       );
       await _marcarServicoComoFaturadoSeAplicavel();
@@ -1336,7 +1337,8 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
                                 destaque: _destaqueCtrl.text,
                                 itens: _itens,
                                 obs: '${_obsCtrl.text.trim()}\nData de Emissão: ${_dataDocCtrl.text.trim()}'.trim(),
-                                laudoDescritivo: _prepararLaudoComEquipamentos(),
+                                laudoDescritivo: _laudoCampoCtrl.text.trim(),
+        equipamentos: _equipamentos,
                                 fotos: _fotos,
                               );
                             },

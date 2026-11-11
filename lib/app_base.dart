@@ -1291,6 +1291,102 @@ class PdfEngine {
                 ),
               ),
               pw.SizedBox(height: 10),
+              if (equipamentos != null && equipamentos.isNotEmpty) ...[
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                  decoration: pw.BoxDecoration(
+                    color: _corCiano,
+                    borderRadius: pw.BorderRadius.circular(3),
+                  ),
+                  child: pw.Text(
+                    'EQUIPAMENTOS EM AVALIAÇÃO / ORÇAMENTO',
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 8.5,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Table(
+                  columnWidths: const {
+                    0: pw.FlexColumnWidth(3.0),
+                    1: pw.FlexColumnWidth(2.5),
+                    2: pw.FlexColumnWidth(2.5),
+                    3: pw.FlexColumnWidth(2.5),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: _corAzulMarinho),
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+                          child: pw.Text('EQUIPAMENTO / TIPO', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+                          child: pw.Text('MARCA', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+                          child: pw.Text('MODELO', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5)),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+                          child: pw.Text('POTÊNCIA / TENSÃO', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5)),
+                        ),
+                      ],
+                    ),
+                    ...equipamentos.map((eq) {
+                      final potTensao = [eq.potencia, eq.tensao].where((s) => s.trim().isNotEmpty).join(' • ');
+                      return pw.TableRow(
+                        decoration: const pw.BoxDecoration(
+                          border: pw.Border(bottom: pw.BorderSide(color: _corBorda, width: 0.5)),
+                        ),
+                        children: [
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 5),
+                            child: pw.Text(eq.tipo.isNotEmpty ? eq.tipo : '-', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 5),
+                            child: pw.Text(eq.marca.isNotEmpty ? eq.marca : '-', style: const pw.TextStyle(fontSize: 7.5)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 5),
+                            child: pw.Text(eq.modelo.isNotEmpty ? eq.modelo : '-', style: const pw.TextStyle(fontSize: 7.5)),
+                          ),
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 3.5, horizontal: 5),
+                            child: pw.Text(potTensao.isNotEmpty ? potTensao : '-', style: const pw.TextStyle(fontSize: 7.5)),
+                          ),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
+                pw.SizedBox(height: 8),
+              ],
+              if (laudoDescritivo != null && laudoDescritivo.trim().isNotEmpty) ...[
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(6),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey100,
+                    borderRadius: pw.BorderRadius.circular(4),
+                    border: pw.Border.all(color: _corBorda, width: 0.5),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('PARECER TÉCNICO / LAUDO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7.5, color: _corAzulMarinho)),
+                      pw.SizedBox(height: 2),
+                      pw.Text(laudoDescritivo, style: const pw.TextStyle(fontSize: 7.5)),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 8),
+              ],
               if (itens != null && itens.isNotEmpty) ...[
                 pw.Table(
                   columnWidths: const {
