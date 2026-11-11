@@ -1,4 +1,4 @@
-name: Compilar APK Eletro Heinzen
+name: Compilar APK O.S. Prime
 
 on:
   workflow_dispatch: # Compila manualmente ao clicar no botão
@@ -24,7 +24,7 @@ jobs:
           cache: true
 
       - name: 1. Gerar Pasta Android (estrutura limpa)
-        run: flutter create . --platforms=android
+        run: flutter create . --platforms=android --org com.osprime
 
       - name: 2. Injetar google-services.json, Chave Fixa e Plugins
         env:
@@ -70,5 +70,5 @@ jobs:
       - name: 6. Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
-          name: app-eletro-heinzen-v${{ github.run_number }}
+          name: app-os-prime-v${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
