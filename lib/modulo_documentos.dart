@@ -189,31 +189,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     );
   }
 
-  void _limparCampos() {
-    setState(() {
-      _clienteAtual = null;
-      _destaqueCtrl.clear();
-      _obsCtrl.clear();
-      _laudoCampoCtrl.clear();
-      _dataDocCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
-      _itens.clear();
-      _equipamentos.clear();
-      _fotos.clear();
-      _idServicoFaturamentoOrigem = null;
-      _idOrcamentoEditando = null;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: corCianoEletrico,
-        content: Text(
-          '✨ Todos os campos foram limpos para um novo documento!',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
