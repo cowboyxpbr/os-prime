@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO: INICIALIZAÇÃO, TEMA, LOGIN, RECUPERAÇÃO E NOTIFICAÇÕES ONESIGNAL
 // lib/main.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -10,11 +10,13 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 import 'app_base.dart';
 import 'screens/menu_principal_page.dart';
+import 'servico_licenca_bugs.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  ServicoLicencaBugs.inicializarCapturaDeErrosGlobal();
 
   // CONFIGURAÇÃO ONESIGNAL (COM SOM E PERMISSÃO ATIVA - ID CORRIGIDO COM 4708)
   try {
@@ -530,6 +532,21 @@ class _TelaLoginState extends State<TelaLogin> {
                                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
                                 : const Text('ENTRAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 40,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.amberAccent),
+                              foregroundColor: Colors.amberAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.vpn_key_rounded, size: 18),
+                            label: const Text('CADASTRAR EMPRESA COM CHAVE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () => ServicoLicencaBugs.abrirModalCadastroEmpresaComChave(context),
+                          ),
+                        ),
                         ),
                         
                       ],

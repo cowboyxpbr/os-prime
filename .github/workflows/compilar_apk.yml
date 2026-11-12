@@ -1,7 +1,9 @@
-﻿name: Compilar APK O.S. Prime
+name: Compilar APK O.S. Prime
 
 on:
-  workflow_dispatch: # Compila manualmente ao clicar no botão
+  workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
@@ -31,22 +33,18 @@ jobs:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
           CHAVE_FIXA: ${{ secrets.CHAVE_FIXA }}
         run: |
-          # 1. Cria o google-services.json
           echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
-                    # 2. Copia a chave permanente diretamente do repositório
           mkdir -p ~/.android
           cp chave_assinatura.keystore ~/.android/debug.keystore
           cp chave_assinatura.keystore android/app/debug.keystore
 
-          # 3. Força o Gradle a usar a chave fixa no build Release
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i '/signingConfigs {/a \        getByName("debug") { storeFile = file("debug.keystore") }' android/app/build.gradle.kts
           elif [ -f "android/app/build.gradle" ]; then
             sed -i '/signingConfigs {/a \        debug { storeFile file("debug.keystore") }' android/app/build.gradle
           fi
 
-          # 4. Aplica o plugin do Google Services
           if [ -f "android/settings.gradle.kts" ]; then
             sed -i '/plugins {/a \    id("com.google.gms.google-services") version "4.4.2" apply false' android/settings.gradle.kts
             sed -i '/plugins {/a \    id("com.google.gms.google-services")' android/app/build.gradle.kts
@@ -64,11 +62,32 @@ jobs:
       - name: 4. Aplicar Ícone Oficial do App
         run: dart run flutter_launcher_icons
 
-      - name: 5. Compilar o APK Release Versionado
-        run: flutter build apk --release --build-number=${{ github.run_number }}
+      - name: 5. Compilar APK Comercial (Empresas Clientes)
+        run: |
+          mkdir -p apks_prontos
+          flutter build apk --release -t lib/main.dart --build-number=${{ github.run_number }}
+          cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
-      - name: 6. Disponibilizar APK para Download
+      - name: 6. Compilar APK Gerenciador (Exclusivo Dono / Super Admin)
+        run: |
+          sed -i 's/"package_name": *"[^"]*"/"package_name": "com.osprime.admin"/g' android/app/google-services.json
+          if [ -f "android/app/build.gradle.kts" ]; then
+            sed -i 's/applicationId *= *"[^"]*"/applicationId = "com.osprime.admin"/g' android/app/build.gradle.kts
+          elif [ -f "android/app/build.gradle" ]; then
+            sed -i 's/applicationId *"[^"]*"/applicationId "com.osprime.admin"/g' android/app/build.gradle
+          fi
+          sed -i 's/android:label="[^"]*"/android:label="O.S. Prime Admin"/g' android/app/src/main/AndroidManifest.xml
+          flutter build apk --release -t lib/main_admin.dart --build-number=${{ github.run_number }}
+          cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
+
+      - name: 7. Disponibilizar APK das Empresas para Download
         uses: actions/upload-artifact@v4
         with:
-          name: app-os-prime-v${{ github.run_number }}
-          path: build/app/outputs/flutter-apk/*.apk
+          name: 1-APK-COMERCIAL-EMPRESAS-v${{ github.run_number }}
+          path: apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
+
+      - name: 8. Disponibilizar APK Gerenciador do Dono para Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2-APK-GERENCIADOR-DONO-v${{ github.run_number }}
+          path: apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk

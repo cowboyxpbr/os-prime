@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO: MENU PRINCIPAL COM MARCA D'ÁGUA E BORDAS TRANSLÚCIDAS
 // lib/screens/menu_principal_page.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -23,6 +23,7 @@ import 'historico_funcionario_page.dart';
 import 'menu_telas_auxiliares.dart';
 import 'dados_empresa_page.dart';
 import 'licenca_bloqueada_page.dart';
+import '../servico_licenca_bugs.dart';
 
 // HELPER: DISPARADOR DIRETO DO WHATSAPP
 Future<void> _abrirWhatsApp(String telefone, {String mensagem = ''}) async {
@@ -74,7 +75,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
           validade = DateTime.tryParse(validadeStr);
         }
         final agora = DateTime.now();
-        final expirado = (validade != null && agora.isAfter(validade)) || status == 'bloqueado';
+        final expirado = (validade != null && agora.isAfter(validade)) || status == 'bloqueado' || status == 'suspenso' || status == 'pendente' || status == 'aguardando_cadastro';
 
         if (expirado && mounted) {
           Navigator.pushReplacement(
@@ -950,6 +951,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
 
                 Column(
                   children: [
+                    MonitorLicencaMasterWidget(usuarioLogado: widget.usuarioLogado),
                     Container(
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1045,6 +1047,15 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             icon: const Icon(Icons.sync, color: corCianoEletrico),
                             tooltip: 'Sincronizar Dados',
                             onPressed: _sincronizar,
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            iconSize: 24,
+                            padding: const EdgeInsets.all(6),
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.bug_report_outlined, color: Colors.orangeAccent),
+                            tooltip: 'Relatar Erro / Bug',
+                            onPressed: () => ServicoLicencaBugs.abrirModalReportarBug(context, widget.usuarioLogado),
                           ),
 
                           // BOTÃO DE GESTÃO DE EQUIPE E SENHAS (MANTIDO AQUI AO LADO DO SINCRONIZAR)
