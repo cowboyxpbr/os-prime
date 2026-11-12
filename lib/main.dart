@@ -87,6 +87,52 @@ class _TelaLoginState extends State<TelaLogin> {
   bool _manterLogado = true, _senhaVisivel = false, _carregando = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verificarPrimeiroAcesso());
+  }
+
+  Future<void> _verificarPrimeiroAcesso() async {
+    try {
+      final res = await Supabase.instance.client.from('usuarios').select('id').ilike('cargo', 'master').limit(1);
+      if (res.isEmpty && mounted) _solicitarChavePrimeiroAcesso();
+    } catch (_) {}
+  }
+
+  void _solicitarChavePrimeiroAcesso() {
+    final chaveCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: corCardFundo,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
+        title: const Row(children: [Icon(Icons.vpn_key_rounded, color: corCianoEletrico, size: 22), SizedBox(width: 8), Text('Chave de Primeiro Acesso', style: TextStyle(color: corCianoEletrico, fontSize: 15, fontWeight: FontWeight.bold))]),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Para configurar o primeiro Administrador Master, digite a Chave Mestra oficial:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 14),
+          TextField(controller: chaveCtrl, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Chave Mestra *', hintText: 'PRIME-2026-MASTER', isDense: true, prefixIcon: Icon(Icons.key, color: corCianoEletrico, size: 18))),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
+            child: const Text('Liberar Acesso', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () {
+              if (chaveCtrl.text.trim() == 'PRIME-2026-MASTER') {
+                Navigator.pop(ctx);
+                _dialogConfigurarAdmin();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Chave Mestra inválida!')));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   void dispose() {
     _usuarioCtrl.dispose();
     _senhaCtrl.dispose();
@@ -485,13 +531,7 @@ class _TelaLoginState extends State<TelaLogin> {
                                 : const Text('ENTRAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        TextButton.icon(
-                          style: TextButton.styleFrom(foregroundColor: corCianoSuave, visualDensity: VisualDensity.compact),
-                          icon: const Icon(Icons.person_add_alt_1, size: 16),
-                          label: const Text('Primeiro Acesso / Cadastrar Administrador', style: TextStyle(fontSize: 11.5)),
-                          onPressed: _dialogConfigurarAdmin,
-                        ),
+                        
                       ],
                     ),
                   ),

@@ -753,17 +753,15 @@ class BannerOSPrime extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: double.infinity,
-              child: Image.asset(
+            Container(height: 100, width: double.infinity, color: const Color(0xFF071426), child: Image.asset(
                 'assets/cabecalho.png',
                 width: double.infinity,
-                fit: BoxFit.fitWidth,
+                height: 100, fit: BoxFit.contain,
                 alignment: Alignment.center,
                 errorBuilder: (context, error, stackTrace) => Image.asset(
                   'cabecalho.png',
                   width: double.infinity,
-                  fit: BoxFit.fitWidth,
+                  height: 100, fit: BoxFit.contain,
                   alignment: Alignment.center,
                   errorBuilder: (context, error, stackTrace) => Container(
                     height: 65,

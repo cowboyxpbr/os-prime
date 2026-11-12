@@ -882,6 +882,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
             acaoDireita: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (isMaster)
                 InkWell(
                   onTap: () {
                     Navigator.push(
@@ -1189,7 +1190,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             const SizedBox(height: 8),
 
                             // "MINHAS O.S." PARA SÊNIOR E MASTER NA RUA
-                            if (isSenior || isMaster) ...[
+                            if (isSenior && !isMaster) ...[
                               _cardHorizontal(
                                 "Minhas O.S.",
                                 "Minhas ordens recebidas para atendimento em campo",
