@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO BASE, MODELOS, CACHE OFFLINE, CORES, ONESIGNAL E ENGINE PDF
 // lib/app_base.dart (VERSÃO COMPLETA E UNIFICADA: O.S. Prime)
 // ============================================================================
@@ -753,15 +753,15 @@ class BannerOSPrime extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(height: 100, width: double.infinity, color: const Color(0xFF071426), child: Image.asset(
+            SizedBox(width: double.infinity, child: Image.asset(
                 'assets/cabecalho.png',
                 width: double.infinity,
-                height: 100, fit: BoxFit.contain,
+                fit: BoxFit.fitWidth,
                 alignment: Alignment.center,
                 errorBuilder: (context, error, stackTrace) => Image.asset(
                   'cabecalho.png',
                   width: double.infinity,
-                  height: 100, fit: BoxFit.contain,
+                  fit: BoxFit.fitWidth,
                   alignment: Alignment.center,
                   errorBuilder: (context, error, stackTrace) => Container(
                     height: 65,
