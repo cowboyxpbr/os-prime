@@ -124,7 +124,8 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
         final stLower = status.toLowerCase();
 
         // 🛡️ Se for cancelada ou excluída em qualquer variação, NUNCA entra no histórico
-        if (stLower.contains('cancel') || stLower.contains('exclu')) {
+        // Não entram no histórico: canceladas, excluídas ou que ainda estejam pendentes/em andamento
+        if (stLower.contains('cancel') || stLower.contains('exclu') || stLower == 'pendente' || stLower == 'em andamento') {
           continue;
         }
 
@@ -174,7 +175,8 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
         final stLower = status.toLowerCase();
 
         // 🛡️ Se for cancelado ou excluído, nunca entra no histórico
-        if (stLower.contains('cancel') || stLower.contains('exclu')) {
+        // Não entram no histórico: canceladas, excluídas ou que ainda estejam pendentes/em andamento
+        if (stLower.contains('cancel') || stLower.contains('exclu') || stLower == 'pendente' || stLower == 'em andamento') {
           continue;
         }
 

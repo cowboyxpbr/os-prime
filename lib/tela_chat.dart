@@ -118,6 +118,16 @@ class TelaListaContatosChat extends StatefulWidget {
 
 class _TelaListaContatosChatState extends State<TelaListaContatosChat> {
   final Set<String> _contatosZeradosLocalmente = {};
+  late final Stream<List<Map<String, dynamic>>> _usuariosStream;
+  late final Stream<List<Map<String, dynamic>>> _mensagensStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final supabase = Supabase.instance.client;
+    _usuariosStream = supabase.from('usuarios').stream(primaryKey: ['id']).order('nome');
+    _mensagensStream = supabase.from('mensagens_chat').stream(primaryKey: ['id']).order('id', ascending: false).limit(80);
+  }
 
   bool _ehLideranca(Map<String, dynamic> u) {
     final cargo = (u['cargo'] ?? '').toString().toLowerCase().trim();
@@ -161,8 +171,9 @@ class _TelaListaContatosChatState extends State<TelaListaContatosChat> {
         ),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: supabase.from('usuarios').stream(primaryKey: ['id']).order('nome'),
+        stream: _usuariosStream,
         builder: (context, userSnap) {
+          if (userSnap.connectionState == ConnectionState.waiting && !userSnap.hasData) return const Center(child: CircularProgressIndicator(color: corCianoEletrico));
           final todosUsuarios = userSnap.data ?? [];
 
           final contatosPermitidos = todosUsuarios.where((u) {
@@ -177,11 +188,7 @@ class _TelaListaContatosChatState extends State<TelaListaContatosChat> {
           }).toList();
 
           return StreamBuilder<List<Map<String, dynamic>>>(
-            stream: supabase
-                .from('mensagens_chat')
-                .stream(primaryKey: ['id'])
-                .order('id', ascending: false)
-                .limit(80),
+            stream: _mensagensStream,
             builder: (context, msgSnap) {
               final todasMsgs = msgSnap.data ?? [];
 
@@ -713,11 +720,7 @@ class _TelaConversaPrivadaState extends State<TelaConversaPrivada> {
         children: [
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: supabase
-                  .from('mensagens_chat')
-                  .stream(primaryKey: ['id'])
-                  .order('created_at', ascending: false)
-                  .limit(80),
+              stream: _mensagensStream,
               builder: (context, snapshot) {
                 final todas = snapshot.data ?? [];
 

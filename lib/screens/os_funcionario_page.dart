@@ -1,4 +1,5 @@
-﻿// ============================================================================
+﻿import 'package:intl/intl.dart';
+// ============================================================================
 // ARQUIVO: TELA DE O.S. DO TÉCNICO COM ACESSO RÍGIDO INDIVIDUAL E SIGILO TOTAL
 // lib/screens/os_funcionario_page.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -409,7 +410,29 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
 
                 // 🛡️ FILTRO RÍGIDO: Cada usuário SÓ enxerga o que foi enviado DIRETAMENTE a ele!
                 final minhasOS = todos.where((os) {
-                  if (os.status == 'Faturada' || os.status == 'Orçada') return false; // Faturadas e Orçadas vão para o histórico
+                  // 1. Orçadas ou Aguardando Orçamento vão para o histórico aguardar decisão
+                  if (os.status == 'Faturada' || os.status == 'Orçada' || os.status == 'Aguardando Orçamento') {
+                    return false;
+                  }
+
+                  // 2. Concluídas: duram até 12 horas nesta tela, depois descem para o histórico
+                  if (os.status == 'Concluída') {
+                    if (os.dataConclusao != null && os.dataConclusao!.trim().isNotEmpty) {
+                      try {
+                        final dtConc = DateFormat('dd/MM/yyyy • HH:mm').parse(os.dataConclusao!.trim());
+                        if (DateTime.now().difference(dtConc).inHours >= 12) {
+                          return false; // Mais de 12 horas: desce para o histórico
+                        }
+                      } catch (_) {
+                        final dtIso = DateTime.tryParse(os.dataConclusao!);
+                        if (dtIso != null && DateTime.now().difference(dtIso).inHours >= 12) {
+                          return false;
+                        }
+                      }
+                    } else {
+                      return false;
+                    }
+                  }
 
                   final tec = os.tecnicoDesignado.trim().toLowerCase().replaceAll('@', '');
                   if (tec.isEmpty) return false; // Se não tem técnico definido, não vaza para ninguém
