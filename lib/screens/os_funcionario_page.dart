@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // ARQUIVO: TELA DE O.S. DO TÉCNICO COM ACESSO RÍGIDO INDIVIDUAL E SIGILO TOTAL
 // lib/screens/os_funcionario_page.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -20,6 +20,7 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
   late final Stream<List<Map<String, dynamic>>> _stream;
   bool _popupAberto = false;
   final Set<String> _idsNotificadosNestaSessao = {};
+  bool enviarAoEscritorio = false;
 
   @override
   void initState() {

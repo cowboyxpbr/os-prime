@@ -1,3 +1,4 @@
+﻿import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 // ARQUIVO: ORÇAMENTOS COM DATA FLEXÍVEL, EQUIPAMENTOS, LAUDO E HISTÓRICO 90 DIAS
 // lib/modulo_documentos.dart
