@@ -97,7 +97,7 @@ class _TelaLoginState extends State<TelaLogin> {
   Future<void> _verificarPrimeiroAcesso() async {
     try {
       final res = await Supabase.instance.client.from('usuarios').select('id').ilike('cargo', 'master').limit(1);
-      if (res.isEmpty && mounted) _solicitarChavePrimeiroAcesso();
+      if (res.isEmpty && mounted) ServicoLicencaBugs.abrirModalCadastroEmpresaComChave(context);
     } catch (_) {}
   }
 
@@ -543,7 +543,7 @@ class _TelaLoginState extends State<TelaLogin> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             icon: const Icon(Icons.vpn_key_rounded, size: 18),
-                            label: const Text('CADASTRAR EMPRESA COM CHAVE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: const Text('CADASTRAR ADM MASTER & EMPRESA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                             onPressed: () => ServicoLicencaBugs.abrirModalCadastroEmpresaComChave(context),
                           ),
                         ),

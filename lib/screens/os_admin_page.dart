@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // GESTÃO DE O.S. (ADMIN): DESPACHO DIRETO, SEM OPÇÃO GERAL, BUSCA E PUSH ONESIGNAL
 // lib/screens/os_admin_page.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -21,7 +21,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
   late final Stream<List<Map<String, dynamic>>> _stream;
   List<OrdemServico> _offlineOS = [];
   List<UsuarioApp> _tecnicos = [];
-  String _filtroStatus = 'Ativas';
+  String _filtroStatus = 'Todas';
   String _filtroPesquisa = '';
   bool _mostrarBusca = false;
 
@@ -886,31 +886,50 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
         children: [
           const BannerOSPrime(subtituloTela: 'Gestão de O.S. (Despacho)', exibirBotaoVoltar: true),
 
-          // FILTROS DE STATUS
+                    // FILTROS DE STATUS ORGANIZADOS EM 4 BOTÕES INDIVIDUAIS
           Padding(
-            padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 2),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: ['Ativas', 'Pendente', 'Em Andamento', 'Concluída', 'Histórico (90 dias)'].map((status) {
-                  final sel = _filtroStatus == status;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(status),
-                      selected: sel,
-                      selectedColor: corCianoEletrico.withAlpha(50),
-                      labelStyle: TextStyle(
-                        color: sel ? corCianoEletrico : Colors.grey,
-                        fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 11.5,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Row(
+              children: [
+                {'id': 'Todas', 'label': 'Todas', 'cor': corCianoEletrico},
+                {'id': 'Pendente', 'label': 'Pendentes', 'cor': Colors.orangeAccent},
+                {'id': 'Em Andamento', 'label': 'Em Andamento', 'cor': Colors.amberAccent},
+                {'id': 'Concluída', 'label': 'Concluídas', 'cor': corVerdeWhats},
+              ].map((item) {
+                final String id = item['id'] as String;
+                final String label = item['label'] as String;
+                final Color cor = item['cor'] as Color;
+                final bool sel = _filtroStatus == id;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                    child: InkWell(
+                      onTap: () => setState(() => _filtroStatus = id),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+                        decoration: BoxDecoration(
+                          color: sel ? cor.withOpacity(0.22) : corCardFundo,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: sel ? cor : Colors.white12, width: sel ? 1.5 : 1),
+                        ),
+                        child: Center(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: sel ? cor : Colors.grey.shade400,
+                              fontWeight: sel ? FontWeight.bold : FontWeight.w500,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ),
                       ),
-                      side: BorderSide(color: sel ? corCianoEletrico : Colors.white12),
-                      onSelected: (_) => setState(() => _filtroStatus = status),
                     ),
-                  );
-                }).toList(),
-              ),
+                  ),
+                );
+              }).toList(),
             ),
           ),
 
@@ -988,12 +1007,15 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                 final todos = (snap.data ?? []).map((m) => OrdemServico.fromMap(m)).toList();
 
                 final filtrados = todos.where((os) {
-                  if (_filtroStatus == 'Ativas') {
-                    if (os.status == 'Faturada') return false;
-                  } else if (_filtroStatus == 'Histórico (90 dias)') {
-                    if (os.status != 'Faturada') return false;
-                  } else {
-                    if (os.status != _filtroStatus) return false;
+                                    final st = os.status.trim().toLowerCase();
+                  if (_filtroStatus == 'Todas') {
+                    // Carrega todas as O.S. (Pendentes, Em Andamento, Concluídas e Histórico 90d)
+                  } else if (_filtroStatus == 'Pendente') {
+                    if (st != 'pendente') return false;
+                  } else if (_filtroStatus == 'Em Andamento') {
+                    if (st != 'em andamento') return false;
+                  } else if (_filtroStatus == 'Concluída') {
+                    if (st != 'concluída' && st != 'concluida' && st != 'faturada') return false;
                   }
 
                   if (_filtroPesquisa.isEmpty) return true;

@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // HISTÓRICO COMPLETO & PRESTAÇÃO DE CONTAS DO TÉCNICO (MODAL CENTRALIZADO)
 // lib/screens/historico_funcionario_page.dart (O.S. Prime)
 // ============================================================================
@@ -27,6 +27,7 @@ class RegistroHistorico {
   final String dataFormatada;
   final DateTime dataObj;
   final double valor;
+  final String tecnico;
 
   RegistroHistorico({
     required this.id,
@@ -41,6 +42,7 @@ class RegistroHistorico {
     required this.dataFormatada,
     required this.dataObj,
     this.valor = 0.0,
+    this.tecnico = '',
   });
 }
 
@@ -72,6 +74,9 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
 
   DateTime? _dataInicial;
   DateTime? _dataFinal;
+  List<String> _listaTecnicos = ['TODOS'];
+  String _tecnicoSelecionado = 'TODOS';
+  bool get _ehLider => widget.usuarioLogado.isMaster || widget.usuarioLogado.isSenior || widget.usuarioLogado.temAcessoAdmin;
 
   @override
   void initState() {
@@ -131,7 +136,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
 
         // Verifica se pertence estritamente ao usuário logado
         final tec = (m['tecnico_designado'] ?? m['tecnico'] ?? '').toString();
-        final corresponde = _pertenceAoTecnico(tec, meuLogin, meuNome);
+        final corresponde = _ehLider ? true : _pertenceAoTecnico(tec, meuLogin, meuNome);
 
         if (corresponde) {
           DateTime dt = DateTime.now();
@@ -164,6 +169,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
             dataFormatada: DateFormat('dd/MM/yyyy').format(dt),
             dataObj: dt,
             valor: valorOS.toDouble(),
+            tecnico: tec.trim().isEmpty ? 'Equipe' : tec.trim(),
           ));
         }
       }
@@ -192,7 +198,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
         }
 
         final tec = (s['tecnico'] ?? s['tecnico_designado'] ?? '').toString();
-        final corresponde = _pertenceAoTecnico(tec, meuLogin, meuNome);
+        final corresponde = _ehLider ? true : _pertenceAoTecnico(tec, meuLogin, meuNome);
 
         if (corresponde) {
           DateTime dt = DateTime.now();
@@ -218,12 +224,17 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
             dataFormatada: s['data']?.toString() ?? DateFormat('dd/MM/yyyy').format(dt),
             dataObj: dt,
             valor: (qtd * val).toDouble(),
+            tecnico: tec.trim().isEmpty ? 'Equipe' : tec.trim(),
           ));
         }
       }
 
       // Ordena decrescente por data (mais recentes no topo)
       lista.sort((a, b) => b.dataObj.compareTo(a.dataObj));
+      final Set<String> tecs = {'TODOS'};
+      for (final item in lista) { if (item.tecnico.trim().isNotEmpty) tecs.add(item.tecnico.trim()); }
+      try { final us = await supabase.from('usuarios').select('nome'); for (final u in us) { final n = (u['nome'] ?? '').toString().trim(); if (n.isNotEmpty) tecs.add(n); } } catch (_) {}
+      _listaTecnicos = tecs.toList();
     } catch (_) {}
 
     if (mounted) {
@@ -244,6 +255,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
     bool? manual,
     DateTime? dIni,
     DateTime? dFim,
+    String? tecFiltro,
   }) {
     final usePlantao = aplicarCheckboxes ? (plantao ?? _filtroPlantao) : true;
     final useEmergencia = aplicarCheckboxes ? (emergencia ?? _filtroEmergencia) : true;
@@ -255,6 +267,10 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
     final fim = dFim ?? _dataFinal;
 
     return _todosRegistros.where((item) {
+      final tf = tecFiltro ?? _tecnicoSelecionado;
+      if (_ehLider && tf != 'TODOS') {
+        if (!item.tecnico.toLowerCase().contains(tf.toLowerCase()) && !tf.toLowerCase().contains(item.tecnico.toLowerCase())) return false;
+      }
       if (_busca.trim().isNotEmpty) {
         final b = _busca.trim().toLowerCase();
         final match = item.cliente.toLowerCase().contains(b) ||
@@ -397,6 +413,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
     DateTime? tempIni = _dataInicial;
     DateTime? tempFim = _dataFinal;
     bool processando = false;
+    String tempTec = _tecnicoSelecionado;
 
     showModalBottomSheet(
       context: context,
@@ -418,6 +435,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
             manual: tempManual,
             dIni: tempIni,
             dFim: tempFim,
+            tecFiltro: tempTec,
           );
 
           return SafeArea(
@@ -445,6 +463,25 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
                     ),
                     const SizedBox(height: 12),
 
+                    if (_ehLider) ...[
+                      const Text('FILTRAR POR FUNCIONÁRIO:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: corCianoSuave)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _listaTecnicos.map((nomeTec) {
+                          final sel = tempTec == nomeTec;
+                          return ChoiceChip(
+                            label: Text(nomeTec == 'TODOS' ? '👥 Todos' : nomeTec, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
+                            selected: sel,
+                            selectedColor: corCianoEletrico,
+                            backgroundColor: const Color(0xFF162332),
+                            onSelected: (_) => setM(() => tempTec = nomeTec),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     const Text('PERÍODO DE FECHAMENTO:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: corCianoSuave)),
                     const SizedBox(height: 6),
                     Row(
@@ -651,7 +688,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
       'cliente': r.cliente,
       'data': r.dataFormatada,
       'descricao': '[${r.tipo} • ${r.referencia} | ${r.prioridade.toUpperCase()}] ${r.descricao}',
-      'tecnico': widget.usuarioLogado.nome,
+      'tecnico': r.tecnico.isNotEmpty ? r.tecnico : widget.usuarioLogado.nome,
       'status': r.status,
       'quantidade': 1,
       'valor_unitario': r.valor,
@@ -799,7 +836,7 @@ class _TelaHistoricoFuncionarioState extends State<TelaHistoricoFuncionario> {
                                 children: [
                                   const SizedBox(height: 3),
                                   Text(
-                                    "${r.tipo} • ${r.referencia} • 📅 ${r.dataFormatada}",
+                                    "${r.tipo} • ${r.referencia} • 📅 ${r.dataFormatada}${_ehLider ? ' • 👤 ' + r.tecnico : ''}",
                                     style: const TextStyle(color: corCianoSuave, fontSize: 10.5),
                                   ),
                                   if (r.endereco.isNotEmpty)
