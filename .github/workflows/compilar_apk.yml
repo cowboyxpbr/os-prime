@@ -1,4 +1,4 @@
-name: Compilar APK O.S. Prime
+﻿name: Compilar APK O.S. Prime
 
 on:
   workflow_dispatch: # Compila manualmente ao clicar no botão
@@ -34,10 +34,10 @@ jobs:
           # 1. Cria o google-services.json
           echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
-          # 2. Cria a chave fixa em ambos os locais para garantir assinatura idêntica
+                    # 2. Copia a chave permanente diretamente do repositório
           mkdir -p ~/.android
-          echo "$CHAVE_FIXA" | base64 --decode > ~/.android/debug.keystore
-          echo "$CHAVE_FIXA" | base64 --decode > android/app/debug.keystore
+          cp chave_assinatura.keystore ~/.android/debug.keystore
+          cp chave_assinatura.keystore android/app/debug.keystore
 
           # 3. Força o Gradle a usar a chave fixa no build Release
           if [ -f "android/app/build.gradle.kts" ]; then
