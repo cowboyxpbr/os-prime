@@ -1100,42 +1100,47 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                         ]),
                       ),
 
-                    Expanded(
+                                        Expanded(
                       child: ListView(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         children: [
                           if (!temAcessoAdmin) ...[
-                            _tituloSecao("SERVIÇOS DE CAMPO"),
-                            _cardHorizontal(
-                              "Ordem de Serviço",
-                              "Ordens recebidas para execução",
-                              Icons.assignment_ind_rounded,
-                              corVerdeWhats,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => TelaOSFuncionario(usuarioLogado: widget.usuarioLogado)),
-                              ).then((_) => _sincronizar()),
-                            ),
-                            const SizedBox(height: 8),
-
-                            _cardHorizontal(
-                              "Lançar Manual",
-                              "Registrar trabalho executado de campo",
-                              Icons.build_circle_rounded,
-                              corCianoEletrico,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TelaLancamentoTrabalhoFuncionario(
-                                    usuarioLogado: widget.usuarioLogado,
-                                    modoAdmin: false,
+                            _tituloSecao("SERVIÇOS DE CAMPO & CONTROLE"),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _cardCompacto(
+                                    "Ordem de Serviço",
+                                    "Ordens recebidas",
+                                    Icons.assignment_ind_rounded,
+                                    corVerdeWhats,
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => TelaOSFuncionario(usuarioLogado: widget.usuarioLogado)),
+                                    ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                              ).then((_) => _sincronizar()),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _cardCompacto(
+                                    "Trabalho sem O.S",
+                                    "Serviço de campo",
+                                    Icons.build_circle_rounded,
+                                    corCianoEletrico,
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TelaLancamentoTrabalhoFuncionario(
+                                          usuarioLogado: widget.usuarioLogado,
+                                          modoAdmin: false,
+                                        ),
+                                      ),
+                                    ).then((_) => _sincronizar()),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 8),
-
-                            _tituloSecao("MEU CONTROLE"),
                             _cardHorizontal(
                               "Meu Histórico e Relatório",
                               "Prestação de contas e histórico",
@@ -1151,11 +1156,12 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                           ] else ...[
                             _tituloSecao("OPERAÇÃO & FATURAMENTO"),
 
+                            // 2 CURTOS: LANÇAR + FATURAR
                             Row(
                               children: [
                                 Expanded(
                                   child: _cardCompacto(
-                                    "Lançar c/ Preço",
+                                    "Lançar",
                                     "Trabalho pronto",
                                     Icons.add_shopping_cart_rounded,
                                     corVerdeWhats,
@@ -1172,8 +1178,8 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: _cardCompacto(
-                                    "Faturamento Nuvem",
-                                    "Precificar & Relatórios",
+                                    "Faturar",
+                                    "Precificar",
                                     Icons.cloud_sync_rounded,
                                     corCianoEletrico,
                                     () => Navigator.push(
@@ -1188,6 +1194,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             ),
                             const SizedBox(height: 8),
 
+                            // 1 LONGO: ORDENS DE SERVIÇO (O.S.)
                             _cardHorizontal(
                               "Ordens de Serviço (O.S.)",
                               "Criar, despachar e acompanhar atendimentos",
@@ -1200,47 +1207,68 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             ),
                             const SizedBox(height: 8),
 
-                            // "MINHAS O.S." PARA SÊNIOR E MASTER NA RUA
-                            if (isSenior && !isMaster) ...[
-                              _cardHorizontal(
-                                "Minhas O.S.",
-                                "Minhas ordens recebidas para atendimento em campo",
-                                Icons.assignment_ind_rounded,
-                                corVerdeWhats,
-                                () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TelaOSFuncionario(usuarioLogado: widget.usuarioLogado),
-                                  ),
-                                ).then((_) => _sincronizar()),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-
-                            _cardHorizontal(
-                              "Lançar Manual",
-                              "Trabalho executado de campo sem preço",
-                              Icons.build_circle_rounded,
-                              corCianoEletrico,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TelaLancamentoTrabalhoFuncionario(
-                                    usuarioLogado: widget.usuarioLogado,
-                                    modoAdmin: false,
+                            // 2 CURTOS: MINHAS O.S. + TRABALHO SEM O.S
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _cardCompacto(
+                                    "Minhas O.S.",
+                                    "Atendimento campo",
+                                    Icons.assignment_ind_rounded,
+                                    corVerdeWhats,
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TelaOSFuncionario(usuarioLogado: widget.usuarioLogado),
+                                      ),
+                                    ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                              ).then((_) => _sincronizar()),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _cardCompacto(
+                                    "Trabalho sem O.S",
+                                    "Serviço de campo",
+                                    Icons.build_circle_rounded,
+                                    corCianoEletrico,
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TelaLancamentoTrabalhoFuncionario(
+                                          usuarioLogado: widget.usuarioLogado,
+                                          modoAdmin: false,
+                                        ),
+                                      ),
+                                    ).then((_) => _sincronizar()),
+                                  ),
+                                ),
+                              ],
                             ),
 
                             _tituloSecao("DOCUMENTOS & LAUDOS TÉCNICOS"),
 
+                            // 1 LONGO: RELATÓRIOS DE CONDOMÍNIO
+                            _cardHorizontal(
+                              "Relatórios de Condomínio",
+                              "Laudos periciais com equipamentos, até 10 fotos e WhatsApp",
+                              Icons.apartment_rounded,
+                              corCianoEletrico,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TelaRelatoriosCondominio(usuarioLogado: widget.usuarioLogado),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+
+                            // 2 CURTOS: ORÇAMENTO (SEM SUBTEXTO) + RECIBO
                             Row(
                               children: [
                                 Expanded(
                                   child: _cardCompacto(
                                     "Orçamento",
-                                    "Laudo c/ fotos",
+                                    "",
                                     Icons.request_quote_outlined,
                                     corAmareloSuave,
                                     () => Navigator.push(
@@ -1268,23 +1296,25 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-
-                            _cardHorizontal(
-                              "Relatórios de Condomínio",
-                              "Laudos periciais com equipamentos, até 10 fotos e WhatsApp",
-                              Icons.apartment_rounded,
-                              corCianoEletrico,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TelaRelatoriosCondominio(usuarioLogado: widget.usuarioLogado),
-                                ),
-                              ),
-                            ),
 
                             _tituloSecao("CADASTROS & NOTAS"),
 
+                            // 1 LONGO: MEU HISTÓRICO E RELATÓRIO
+                            _cardHorizontal(
+                              "Meu Histórico e Relatório",
+                              "Prestação de contas e histórico de produção",
+                              Icons.history_edu_rounded,
+                              corAmareloSuave,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TelaHistoricoFuncionario(usuarioLogado: widget.usuarioLogado),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+
+                            // 2 CURTOS: CLIENTES + DIÁRIO / NOTAS
                             Row(
                               children: [
                                 Expanded(
@@ -1303,7 +1333,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                 Expanded(
                                   child: _cardCompacto(
                                     "Diário / Notas",
-                                    "Anotações Xiaomi",
+                                    "Anotações",
                                     Icons.note_alt_rounded,
                                     corRoxoNotas,
                                     () => Navigator.push(
@@ -1313,20 +1343,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-
-                            _cardHorizontal(
-                              "Meu Histórico e Relatório",
-                              "Prestação de contas e histórico de produção",
-                              Icons.history_edu_rounded,
-                              corAmareloSuave,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TelaHistoricoFuncionario(usuarioLogado: widget.usuarioLogado),
-                                ),
-                              ),
                             ),
                             const SizedBox(height: 20),
                           ],
@@ -1380,7 +1396,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
             ),
             const SizedBox(height: 6),
             Text(tit, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: corTextoClaro)),
-            Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
+            if (sub.trim().isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
