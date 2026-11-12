@@ -51,6 +51,18 @@ class ServicoOrcamentosSalvos {
 
   static Future<void> excluir(String id) async {
     final lista = await carregar();
+    final itemExcluido = lista.firstWhere((item) => item['id'] == id, orElse: () => {});
+    if (itemExcluido.isNotEmpty) {
+      final idOS = itemExcluido['id_os_origem'];
+      final numOS = itemExcluido['numero_os_origem'];
+      try {
+        if (idOS != null) {
+          await Supabase.instance.client.from('ordens_servico').update({'status': 'Cancelada'}).eq('id', idOS);
+        } else if (numOS != null) {
+          await Supabase.instance.client.from('ordens_servico').update({'status': 'Cancelada'}).eq('numero_os', numOS);
+        }
+      } catch (_) {}
+    }
     lista.removeWhere((item) => item['id'] == id);
     await salvarLista(lista);
   }
@@ -376,6 +388,8 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
   final ImagePicker _picker = ImagePicker();
   bool _gerandoPdf = false;
   dynamic _idServicoFaturamentoOrigem;
+dynamic _idOSOrigem;
+String? _numeroOSOrigem;
   String? _idOrcamentoEditando;
 
   double get _totalGeral => _itens.fold(0.0, (acc, item) => acc + item.subtotal);
@@ -582,7 +596,7 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
     return resultado;
   }
 
-  void _salvarOrcamentoNaLista() async {
+  Future<void> _salvarOrcamentoNaLista({bool mostrarFeedback = true}) async {
     if (_clienteAtual == null || _itens.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Selecione o cliente e adicione itens!')));
       return;
@@ -603,12 +617,14 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
       'valor_total': _totalGeral,
       'data': _dataDocCtrl.text.trim(), // DATA SELECIONADA NO CALENDÁRIO
       'status': widget.orcamentoParaEditar?['status'] ?? 'Pendente',
-      'equipamentos': _equipamentos.map((e) => e.toMap()).toList(), // EQUIPAMENTOS SALVOS
+      'equipamentos': _equipamentos.map((e) => e.toMap()).toList(),
+      if (_idOSOrigem != null) 'id_os_origem': _idOSOrigem,
+      if (_numeroOSOrigem != null) 'numero_os_origem': _numeroOSOrigem,
     };
 
     await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
 
-    if (mounted) {
+    if (mostrarFeedback && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(backgroundColor: Colors.green, content: Text('💾 Orçamento salvo no Histórico de Orçamentos!')),
       );
@@ -641,6 +657,9 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
         equipamentos: _equipamentos,
         fotos: _fotos,
       );
+            if (widget.tipoDoc == 'ORÇAMENTO' || widget.tipoDoc != 'RECIBO') {
+        await _salvarOrcamentoNaLista(mostrarFeedback: false);
+      }
       await _marcarServicoComoFaturadoSeAplicavel();
 
       await Share.shareXFiles(
@@ -861,6 +880,8 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
                                     }
 
                                     setState(() {
+                                      _idOSOrigem = s['id'];
+                                      _numeroOSOrigem = numOS;
                                       _clienteAtual = DadosCliente(
                                         nome: cliente,
                                         telefone: s['telefone'] ?? '',
@@ -1170,6 +1191,8 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
       _equipamentos.clear();
       _fotos.clear();
       _idServicoFaturamentoOrigem = null;
+      _idOSOrigem = null;
+      _numeroOSOrigem = null;
       _idOrcamentoEditando = null;
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1336,317 +1359,27 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
                   // SEÇÃO DE EQUIPAMENTOS DO ORÇAMENTO (TIPO, MARCA, POTÊNCIA...)
                   // ============================================================
                   if (isOrcamento) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.settings_suggest, color: corCianoEletrico, size: 18),
-                            const SizedBox(width: 6),
-                            Text("Equipamentos em Orçamento (${_equipamentos.length}):", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoEletrico)),
-                          ],
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.amberAccent, width: 1.5),
+                          foregroundColor: Colors.amberAccent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: corCianoEletrico,
-                            foregroundColor: Colors.black,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          ),
-                          icon: const Icon(Icons.add, size: 14),
-                          label: const Text('Equipamento', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          onPressed: () => _modalEquipamentoDialog(),
+                        icon: const Icon(Icons.folder_special_rounded, size: 16),
+                        label: const Text(
+                          'HISTÓRICO DE ORÇAMENTOS',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    if (_equipamentos.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
-                        child: const Center(
-                          child: Text(
-                            'Nenhum equipamento adicionado. (Opcional - Adicione bombas, motores, inversores...)',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey, fontSize: 11),
-                          ),
-                        ),
-                      )
-                    else
-                      ..._equipamentos.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final eq = entry.value;
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(eq.tipo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corTextoClaro)),
-                            subtitle: Text(
-                              "Marca: ${eq.marca} | Modelo: ${eq.modelo}\nPotência: ${eq.potencia} | Tensão: ${eq.tensao}",
-                              style: const TextStyle(color: corCianoSuave, fontSize: 11),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.edit, color: corCianoSuave, size: 16), onPressed: () => _modalEquipamentoDialog(idx)),
-                                IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.delete, color: Colors.redAccent, size: 16), onPressed: () => setState(() => _equipamentos.removeAt(idx))),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    const SizedBox(height: 10),
-                  ],
-
-                  // ============================================================
-                  // ITENS E PEÇAS
-                  // ============================================================
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Itens e Peças:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: corCianoEletrico)),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black, visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                      icon: const Icon(Icons.add, size: 14),
-                      label: const Text('Adicionar Item', style: TextStyle(fontSize: 11)),
-                      onPressed: () => _abrirPopupItem(),
-                    ),
-                  ]),
-                  const SizedBox(height: 6),
-                  if (_itens.isEmpty)
-                    Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(10)), child: const Center(child: Text('Nenhum item adicionado.', style: TextStyle(color: Colors.grey, fontSize: 12))))
-                  else
-                    ..._itens.asMap().entries.map((entry) {
-                      final i = entry.key; final it = entry.value;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        child: ListTile(
-                          dense: true,
-                          title: Text(it.descricao, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
-                          subtitle: Text("${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade} un x ${moeda.format(it.valorUnitario)} = ${moeda.format(it.subtotal)}", style: const TextStyle(color: corCianoEletrico, fontSize: 11)),
-                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                            IconButton(icon: const Icon(Icons.edit, color: corCianoSuave, size: 16), onPressed: () => _abrirPopupItem(i)),
-                            IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent, size: 16), onPressed: () => setState(() => _itens.removeAt(i))),
-                          ]),
-                        ),
-                      );
-                    }),
-                  const SizedBox(height: 10),
-
-                  TextField(
-                    controller: _laudoCampoCtrl,
-                    minLines: 3,
-                    maxLines: 6,
-                    decoration: const InputDecoration(
-                      labelText: 'Laudo Técnico Pericial de Campo (Vinculado às Fotos)',
-                      hintText: 'Descreva o estado das bombas, comandos ou motivos da troca...',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  TextField(controller: _obsCtrl, decoration: const InputDecoration(labelText: 'Observação / Condições de Garantia', isDense: true)),
-                  const SizedBox(height: 12),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(children: [
-                        const Icon(Icons.photo_camera_back, color: corCianoEletrico, size: 18),
-                        const SizedBox(width: 6),
-                        Text("Fotos do Laudo (${_fotos.length}):", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoEletrico)),
-                      ]),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: corCianoEletrico,
-                          foregroundColor: Colors.black,
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        ),
-                        icon: const Icon(Icons.add_a_photo, size: 14),
-                        label: const Text('Anexar Fotos', style: TextStyle(fontSize: 11)),
-                        onPressed: _modalEscolherOrigemFoto,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TelaListaOrcamentosSalvos()),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  if (_fotos.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
-                      child: const Center(child: Text('Nenhuma foto anexada. Toque em "Anexar Fotos" acima.', style: TextStyle(color: Colors.grey, fontSize: 11))),
-                    )
-                  else
-                    ..._fotos.asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final foto = entry.value;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        child: Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: Image.file(File(foto.caminhoArquivo), width: 50, height: 50, fit: BoxFit.cover),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: TextEditingController(text: foto.legenda)..selection = TextSelection.collapsed(offset: foto.legenda.length),
-                                  decoration: InputDecoration(
-                                    labelText: 'Legenda Foto ${idx + 1}',
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                  ),
-                                  onChanged: (v) => foto.legenda = v,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.redAccent, size: 18),
-                                tooltip: 'Excluir esta foto',
-                                onPressed: () => setState(() => _fotos.removeAt(idx)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(8), border: Border.all(color: corCianoEletrico)),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      const Text('TOTAL DO DOCUMENTO:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: corTextoClaro)),
-                      Text(moeda.format(_totalGeral), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: corCianoEletrico)),
-                    ]),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ============================================================
-                  // LINHA 1: BOTÕES COMPACTOS DE AÇÃO (PDF, WHATSAPP E IMPRIMIR)
-                  // ============================================================
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 38,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: corCianoEletrico),
-                              foregroundColor: corCianoEletrico,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.save_alt, size: 15),
-                            label: const Text('SALVAR PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5)),
-                            onPressed: _gerandoPdf ? null : () => _dispararImpressaoOuCompartilhamento(false),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: SizedBox(
-                          height: 38,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: corVerdeWhats,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.share, size: 15),
-                            label: const Text('WHATSAPP', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5)),
-                            onPressed: () {
-                              if (_clienteAtual == null || _itens.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Selecione o cliente e adicione itens!')));
-                                return;
-                              }
-                              PdfEngine.gerarECompartilhar(
-                                tipoDoc: widget.tipoDoc,
-                                cliente: _clienteAtual!,
-                                destaque: _destaqueCtrl.text,
-                                itens: _itens,
-                                obs: '${_obsCtrl.text.trim()}\nData de Emissão: ${_dataDocCtrl.text.trim()}'.trim(),
-                                laudoDescritivo: _laudoCampoCtrl.text.trim(),
-        equipamentos: _equipamentos,
-                                fotos: _fotos,
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: SizedBox(
-                          height: 38,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1F242C),
-                              foregroundColor: corCianoEletrico,
-                              side: const BorderSide(color: corCianoEletrico),
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.print, size: 15),
-                            label: const Text('IMPRIMIR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10.5)),
-                            onPressed: _gerandoPdf ? null : () => _dispararImpressaoOuCompartilhamento(true),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // ============================================================
-                  // LINHA 2: SALVAR NA LISTA + HISTÓRICO DE ORÇAMENTOS (ORÇAMENTO)
-                  // ============================================================
-                  if (isOrcamento) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F354A),
-                                foregroundColor: corCianoEletrico,
-                                side: const BorderSide(color: corCianoEletrico, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.bookmark_add_rounded, size: 16),
-                              label: const Text(
-                                'SALVAR NA LISTA',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                              ),
-                              onPressed: _salvarOrcamentoNaLista,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: SizedBox(
-                            height: 40,
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.amberAccent, width: 1.5),
-                                foregroundColor: Colors.amberAccent,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              icon: const Icon(Icons.folder_special_rounded, size: 16),
-                              label: const Text(
-                                'HISTÓRICO',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                              ),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const TelaListaOrcamentosSalvos()),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
 

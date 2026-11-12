@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO: TELA DE O.S. DO TÉCNICO COM ACESSO RÍGIDO INDIVIDUAL E SIGILO TOTAL
 // lib/screens/os_funcionario_page.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -408,7 +408,7 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
 
                 // 🛡️ FILTRO RÍGIDO: Cada usuário SÓ enxerga o que foi enviado DIRETAMENTE a ele!
                 final minhasOS = todos.where((os) {
-                  if (os.status == 'Faturada') return false; // Faturadas vão para o histórico
+                  if (os.status == 'Faturada' || os.status == 'Orçada') return false; // Faturadas e Orçadas vão para o histórico
 
                   final tec = os.tecnicoDesignado.trim().toLowerCase().replaceAll('@', '');
                   if (tec.isEmpty) return false; // Se não tem técnico definido, não vaza para ninguém
@@ -438,6 +438,7 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                     final bool pendente = os.status == 'Pendente';
                     final bool emAndamento = os.status == 'Em Andamento';
                     final bool concluida = os.status == 'Concluída';
+                    final bool travada = concluida || os.status == 'Aguardando Orçamento' || os.status == 'Orçada';
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -512,7 +513,7 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text("Equipamentos ():", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corCianoEletrico)),
-                                if (!concluida)
+                                if (!travada)
                                   ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: corCianoEletrico,
@@ -535,8 +536,8 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                                   backgroundColor: corCardFundo,
                                   side: const BorderSide(color: corCianoSuave, width: 0.8),
                                   label: Text(" -  ", style: const TextStyle(fontSize: 10, color: corTextoClaro)),
-                                  deleteIcon: !concluida ? const Icon(Icons.close, size: 12, color: Colors.redAccent) : null,
-                                  onDeleted: !concluida ? () async {
+                                  deleteIcon: !travada ? const Icon(Icons.close, size: 12, color: Colors.redAccent) : null,
+                                  onDeleted: !travada ? () async {
                                     setState(() {
                                       os.equipamentos.remove(eq);
                                     });

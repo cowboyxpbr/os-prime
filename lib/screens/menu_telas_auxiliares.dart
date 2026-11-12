@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO AUXILIAR: LANÇAMENTO MANUAL, CENTRAL DE PRECIFICAÇÃO E GESTÃO
 // lib/screens/menu_telas_auxiliares.dart (VERSÃO OFICIAL: O.S. Prime)
 // ============================================================================
@@ -526,6 +526,146 @@ class TelaPrecificacaoOS extends StatefulWidget {
 class _TelaPrecificacaoOSState extends State<TelaPrecificacaoOS> {
   final supabase = Supabase.instance.client;
 
+  // ==========================================================================
+  // ITEM 3: DEVOLVER O.S. AO TÉCNICO (GARANTIA / RETRABALHO)
+  // ==========================================================================
+  void _modalDevolverOS(Map<String, dynamic> os) {
+    final motivoC = TextEditingController();
+    String tipoEtiqueta = 'GARANTIA';
+    bool enviando = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          return AlertDialog(
+            backgroundColor: corCardFundo,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Colors.orangeAccent),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.replay_circle_filled, color: Colors.orangeAccent, size: 22),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Voltar O.S. (Garantia / Retorno)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corTextoClaro),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Ref: ${os['numero_os'] ?? 'S/N'} • ${os['cliente'] ?? ''}",
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoSuave)),
+                  const SizedBox(height: 2),
+                  Text("👤 Técnico: ${os['tecnico_designado'] ?? 'Não informado'}",
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  const Text('Tipo de Devolução:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: corTextoClaro)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: ['GARANTIA', 'RETRABALHO', 'AJUSTE'].map((t) {
+                      final sel = tipoEtiqueta == t;
+                      return ChoiceChip(
+                        label: Text(t, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
+                        selected: sel,
+                        selectedColor: Colors.orangeAccent,
+                        backgroundColor: corCardFundo,
+                        onSelected: (v) {
+                          if (v) setD(() => tipoEtiqueta = t);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: motivoC,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Motivo / Instruções para o Técnico',
+                      hintText: 'Explique o que precisa ser refeito ou verificado em garantia...',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orangeAccent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                ),
+                icon: enviando
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Icon(Icons.send_rounded, size: 15),
+                label: const Text('Devolver ao Técnico', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                onPressed: enviando
+                    ? null
+                    : () async {
+                        final motivo = motivoC.text.trim();
+                        if (motivo.isEmpty) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Informe o motivo da garantia / devolução!')),
+                          );
+                          return;
+                        }
+
+                        setD(() => enviando = true);
+                        try {
+                          final obsAnterior = (os['observacao_tecnico'] != null && os['observacao_tecnico'].toString().isNotEmpty)
+                              ? "\n\n[HISTÓRICO ANTERIOR]: ${os['observacao_tecnico']}"
+                              : '';
+                          final novoProblema = "${os['descricao_problema'] ?? ''}\n\n⚠️ [DEVOLUÇÃO ESCRITÓRIO - $tipoEtiqueta]: $motivo";
+
+                          await supabase.from('ordens_servico').update({
+                            'status': 'Em Andamento',
+                            'prioridade': tipoEtiqueta,
+                            'descricao_problema': novoProblema,
+                            'observacao_tecnico': "[RETORNO $tipoEtiqueta]: $motivo$obsAnterior",
+                            'visualizado_pelo_tecnico': false,
+                          }).eq('id', os['id']);
+
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.orange.shade800,
+                                content: Text('↩️ O.S. #${os['numero_os']} devolvida como $tipoEtiqueta para ${os['tecnico_designado']}!'),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao devolver O.S.: $e')),
+                            );
+                          }
+                        } finally {
+                          if (ctx.mounted) setD(() => enviando = false);
+                        }
+                      },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   List<ItemServico> _extrairItens(Map<String, dynamic> os, double valorTotal) {
     final relatorio = (os['observacao_tecnico'] ?? os['descricao_problema'] ?? '').toString();
     if (relatorio.isEmpty) {
@@ -867,7 +1007,19 @@ class _TelaPrecificacaoOSState extends State<TelaPrecificacaoOS> {
                                   tooltip: 'Excluir O.S.',
                                   onPressed: () => _confirmarExcluirOS(os),
                                 ),
-                                const Spacer(),
+                                                                const Spacer(),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.orangeAccent),
+                                    foregroundColor: Colors.orangeAccent,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                  ),
+                                  icon: const Icon(Icons.replay, size: 14),
+                                  label: const Text('Voltar O.S.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _modalDevolverOS(os),
+                                ),
+                                const SizedBox(width: 6),
                                 ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: corVerdeWhats,
