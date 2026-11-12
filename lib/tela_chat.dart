@@ -125,7 +125,6 @@ class _TelaListaContatosChatState extends State<TelaListaContatosChat> {
   void initState() {
     super.initState();
     final supabase = Supabase.instance.client;
-  late final Stream<List<Map<String, dynamic>>> _mensagensStream;
     _usuariosStream = supabase.from('usuarios').stream(primaryKey: ['id']).order('nome');
     _mensagensStream = supabase.from('mensagens_chat').stream(primaryKey: ['id']).order('id', ascending: false).limit(80);
   }
@@ -145,7 +144,6 @@ class _TelaListaContatosChatState extends State<TelaListaContatosChat> {
         meuLogin == 'admin';
 
     final supabase = Supabase.instance.client;
-  late final Stream<List<Map<String, dynamic>>> _mensagensStream;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
@@ -404,17 +402,18 @@ class _TelaConversaPrivadaState extends State<TelaConversaPrivada> {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final supabase = Supabase.instance.client;
-  late final Stream<List<Map<String, dynamic>>> _mensagensStream;
 
   Set<String> _mensagensOcultasLocalmente = {};
   final Map<dynamic, Map<String, dynamic>> _mensagensSelecionadas = {};
   bool _enviando = false;
 
   bool get _modoSelecao => _mensagensSelecionadas.isNotEmpty;
+  late final Stream<List<Map<String, dynamic>>> _mensagensStream;
 
   @override
   void initState() {
     super.initState();
+    _mensagensStream = supabase.from('mensagens_chat').stream(primaryKey: ['id']).order('id', ascending: false).limit(100);
     _carregarMensagensOcultas();
     _zerarNoBanco();
   }
