@@ -307,43 +307,6 @@ class _TelaNotasState extends State<TelaNotas> {
     final lista = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioKey);
     if (mounted) {
       setState(() => _notas = lista);
-      _verificarAlarmesVencendo(lista);
-    }
-  }
-
-  DateTime? _extrairDataAlarme(String dataHoraStr) {
-    if (!dataHoraStr.contains('🔔 ALARME:')) return null;
-    try {
-      final parte = dataHoraStr.split('🔔 ALARME:').last.trim();
-      return DateFormat('dd/MM/yyyy HH:mm').parse(parte);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _verificarAlarmesVencendo(List<NotaApp> lista) {
-    final agora = DateTime.now();
-    for (final n in lista) {
-      final dtAlarme = _extrairDataAlarme(n.dataHora);
-      if (dtAlarme != null) {
-        final diffMin = dtAlarme.difference(agora).inMinutes;
-        if (diffMin <= 0 && diffMin >= -120) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                backgroundColor: Colors.amberAccent,
-                duration: const Duration(seconds: 6),
-                content: Text(
-                  '⏰ ALARME DE NOTA: "${n.titulo}" (${DateFormat('dd/MM/yyyy HH:mm').format(dtAlarme)})!',
-                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                ),
-              ),
-            );
-          });
-          break;
-        }
-      }
     }
   }
 
@@ -383,9 +346,6 @@ class _TelaNotasState extends State<TelaNotas> {
       final lista = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioKey);
       lista.removeWhere((item) => item.id == n.id);
       await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
-    if (_alarmeSelecionado != null) {
-      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(tituloNota: t.isEmpty ? 'Lembrete / Evento' : t, conteudoNota: c, dataAlarmeLocal: _alarmeSelecionado!);
-    }
       _carregar();
     }
   }
@@ -537,7 +497,7 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
       context: context,
       initialTime: _alarmeSelecionado != null
           ? TimeOfDay.fromDateTime(_alarmeSelecionado!)
-          : TimeOfDay.fromDateTime(agora.add(const Duration(hours: 1))),
+          : TimeOfDay.fromDateTime(agora.add(const Duration(minutes: 5))),
       builder: (ctx, child) => Theme(
         data: ThemeData.dark().copyWith(
           colorScheme: const ColorScheme.dark(
@@ -565,7 +525,7 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
       SnackBar(
         backgroundColor: Colors.amber.shade800,
         content: Text(
-          '⏰ Alarme programado para ${DateFormat('dd/MM/yyyy às HH:mm').format(_alarmeSelecionado!)}! Toque no ✅ no topo para salvar.',
+          '⏰ Alarme definido para ${DateFormat('dd/MM/yyyy às HH:mm').format(_alarmeSelecionado!)}! Toque no ✅ no topo para salvar.',
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
@@ -589,21 +549,21 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
 
     final lista = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioKey);
     final idNota = widget.nota?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final tituloFinal = t.isEmpty ? 'Lembrete / Evento' : t;
 
     lista.removeWhere((n) => n.id == idNota);
-    lista.insert(0, NotaApp(id: idNota, titulo: t.isEmpty ? 'Lembrete / Evento' : t, conteudo: c, dataHora: dataHoraFinal));
+    lista.insert(0, NotaApp(id: idNota, titulo: tituloFinal, conteudo: c, dataHora: dataHoraFinal));
+
+    await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
+
     if (_alarmeSelecionado != null) {
       ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(
-        tituloNota: t.isEmpty ? 'Lembrete / Evento' : t,
+        tituloNota: tituloFinal,
         conteudoNota: c,
         dataAlarmeLocal: _alarmeSelecionado!,
       );
     }
 
-    await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
-    if (_alarmeSelecionado != null) {
-      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(tituloNota: t.isEmpty ? 'Lembrete / Evento' : t, conteudoNota: c, dataAlarmeLocal: _alarmeSelecionado!);
-    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -615,9 +575,6 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
     final lista = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioKey);
     lista.removeWhere((n) => n.id == widget.nota!.id);
     await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
-    if (_alarmeSelecionado != null) {
-      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(tituloNota: t.isEmpty ? 'Lembrete / Evento' : t, conteudoNota: c, dataAlarmeLocal: _alarmeSelecionado!);
-    }
     if (mounted) Navigator.pop(context);
   }
 
