@@ -857,6 +857,113 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     );
   }
 
+  void _modalVoltarOSGarantia(OrdemServico os) {
+    final motivoC = TextEditingController();
+    String tipoEtiqueta = 'GARANTIA';
+    bool enviando = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          backgroundColor: corCardFundo,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Colors.orangeAccent),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.replay_circle_filled, color: Colors.orangeAccent, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Voltar O.S. (Garantia / Retorno)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corTextoClaro)),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Ref: ${os.numeroOS} • ${os.cliente}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoSuave)),
+                Text("👤 Técnico: ${os.tecnicoDesignado}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 12),
+                const Text('Tipo de Retorno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: corTextoClaro)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: ['GARANTIA', 'RETRABALHO', 'AJUSTE'].map((t) {
+                    final sel = tipoEtiqueta == t;
+                    return ChoiceChip(
+                      label: Text(t, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
+                      selected: sel,
+                      selectedColor: Colors.orangeAccent,
+                      backgroundColor: corCardFundo,
+                      onSelected: (v) { if (v) setD(() => tipoEtiqueta = t); },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: motivoC,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Instruções para o Técnico *',
+                    hintText: 'Explique o que precisa ser refeito ou verificado...',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
+              icon: const Icon(Icons.send_rounded, size: 15),
+              label: const Text('Voltar O.S. ao Técnico', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              onPressed: enviando ? null : () async {
+                final motivo = motivoC.text.trim();
+                if (motivo.isEmpty) return;
+                setD(() => enviando = true);
+                try {
+                  final novoProb = "${os.descricaoProblema}\n\n⚠️ [RETORNO - $tipoEtiqueta]: $motivo";
+                  final idNum = int.tryParse(os.id.toString()) ?? os.id;
+                  await Supabase.instance.client.from('ordens_servico').update({
+                    'status': 'Em Andamento',
+                    'prioridade': tipoEtiqueta,
+                    'descricao_problema': novoProb,
+                    'observacao_tecnico': "[RETORNO $tipoEtiqueta]: $motivo",
+                    'visualizado_pelo_tecnico': false,
+                  }).eq('id', idNum!);
+
+                  ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                    tecnicoLogin: os.tecnicoDesignado,
+                    numeroOS: os.numeroOS,
+                    cliente: os.cliente,
+                    categoria: tipoEtiqueta,
+                  );
+
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ ${os.numeroOS} devolvida como $tipoEtiqueta para ${os.tecnicoDesignado}!')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
+                } finally {
+                  if (ctx.mounted) setD(() => enviando = false);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _confirmarExcluirOS(dynamic id) {
     showDialog(
       context: context,
@@ -1089,32 +1196,62 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                             const Divider(height: 12),
 
                             // AÇÕES DA O.S. (SEM OS BOTÕES 'FATURAR' E 'PDF')
-                            Wrap(
+                                                        Wrap(
                               alignment: WrapAlignment.end,
-                              spacing: 4,
+                              spacing: 5,
                               runSpacing: 4,
                               children: [
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                                  icon: const Icon(Icons.edit, size: 14, color: Colors.amberAccent),
-                                  label: const Text('Editar', style: TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.orangeAccent, width: 1),
+                                    foregroundColor: Colors.orangeAccent,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  icon: const Icon(Icons.replay_rounded, size: 13),
+                                  label: const Text('Voltar O.S.', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _modalVoltarOSGarantia(os),
+                                ),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Colors.amberAccent, width: 1),
+                                    foregroundColor: Colors.amberAccent,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  icon: const Icon(Icons.edit, size: 13),
+                                  label: const Text('Editar', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                                   onPressed: () => _modalEditarOS(os),
                                 ),
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                                  icon: const Icon(Icons.share, size: 14, color: corVerdeWhats),
-                                  label: const Text('Whats', style: TextStyle(color: corVerdeWhats, fontSize: 11)),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: corVerdeWhats, width: 1),
+                                    foregroundColor: corVerdeWhats,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  icon: const Icon(Icons.share, size: 13),
+                                  label: const Text('Whats', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                                   onPressed: () => _gerarDocOS(os, 'whats'),
                                 ),
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                                  icon: const Icon(Icons.print, size: 14, color: Colors.amberAccent),
-                                  label: const Text('Imprimir', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: corCianoEletrico, width: 1),
+                                    foregroundColor: corCianoEletrico,
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                  icon: const Icon(Icons.print, size: 13),
+                                  label: const Text('Imprimir', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                                   onPressed: () => _gerarDocOS(os, 'imprimir'),
                                 ),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.delete, color: Colors.redAccent, size: 16),
+                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
                                   tooltip: 'Excluir O.S.',
                                   onPressed: () => _confirmarExcluirOS(os.id),
                                 ),

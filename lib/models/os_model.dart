@@ -1,6 +1,6 @@
-﻿import '../app_base.dart';
+import '../app_base.dart';
 import 'dart:convert';
-import 'dart:io';
+import '../universal_io.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,8 +13,8 @@ class OrdemServico {
   String endereco;
   String descricaoProblema;
   String tecnicoDesignado;
-  String status; // 'Pendente', 'Em Andamento', 'Concluída'
-  String prioridade; // 'Normal', 'Urgente', 'Emergência'
+  String status;
+  String prioridade;
   String dataAbertura;
   String? dataConclusao;
   String? observacaoTecnico;
@@ -49,16 +49,8 @@ class OrdemServico {
     'status': status,
     'prioridade': prioridade,
     'data_abertura': dataAbertura,
-    'data_conclusao': dataConclusao ?? '',
     'observacao_tecnico': observacaoTecnico ?? '',
     'visualizado_pelo_tecnico': visualizadoPeloTecnico,
-    'equipamentos': jsonEncode(equipamentos.map((e) => {
-      'tipo': e.tipo,
-      'marca': e.marca,
-      'modelo': e.modelo,
-      'potencia': e.potencia,
-      'tensao': e.tensao,
-    }).toList()),
   };
 
   factory OrdemServico.fromMap(Map<String, dynamic> m) {
@@ -88,8 +80,8 @@ class OrdemServico {
       status: m['status'] ?? 'Pendente',
       prioridade: m['prioridade'] ?? 'Normal',
       dataAbertura: m['data_abertura'] ?? DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
-      dataConclusao: m['data_conclusao'],
-      observacaoTecnico: m['observacao_tecnico'],
+      dataConclusao: m['data_conclusao']?.toString(),
+      observacaoTecnico: m['observacao_tecnico']?.toString(),
       visualizadoPeloTecnico: m['visualizado_pelo_tecnico'] == true,
       equipamentos: eqs,
     );
@@ -122,10 +114,9 @@ class ServicoOS {
     return [];
   }
 
-  // Criação de nova O.S. pelo Administrador
   static Future<bool> criarOS(OrdemServico os) async {
     try {
-      await _supabase.from('ordens_servico').insert(os.toMap()).timeout(const Duration(seconds: 4));
+      await _supabase.from('ordens_servico').insert(os.toMap()).timeout(const Duration(seconds: 6));
       return true;
     } catch (_) {
       final locais = await carregarLocal();
@@ -135,48 +126,56 @@ class ServicoOS {
     }
   }
 
-  // Atualização de status da O.S. (Iniciar atendimento ou Concluir)
   static Future<void> atualizarStatus({
     required dynamic id,
     required String novoStatus,
     String? relatorioTecnico,
     List<EquipamentoRelatorio>? equipamentos,
   }) async {
+    String relatorioFinal = relatorioTecnico?.trim() ?? '';
+    if (equipamentos != null && equipamentos.isNotEmpty) {
+      final eqTexto = equipamentos.map((e) => "${e.tipo} ${e.marca} ${e.modelo} ${e.potencia}".trim()).join(', ');
+      if (relatorioFinal.isNotEmpty && !relatorioFinal.contains(eqTexto)) {
+        relatorioFinal = "$relatorioFinal [Equip: $eqTexto]";
+      } else if (relatorioFinal.isEmpty) {
+        relatorioFinal = "[Equip: $eqTexto]";
+      }
+    }
+
+    // 1. Atualiza as colunas garantidas do banco (status e observacao_tecnico)
     final dadosUpdate = <String, dynamic>{
       'status': novoStatus,
       'visualizado_pelo_tecnico': true,
     };
 
-    if (relatorioTecnico != null && relatorioTecnico.isNotEmpty) {
-      dadosUpdate['observacao_tecnico'] = relatorioTecnico;
-    }
-
-    if (equipamentos != null) {
-      dadosUpdate['equipamentos'] = jsonEncode(equipamentos.map((e) => {
-        'tipo': e.tipo,
-        'marca': e.marca,
-        'modelo': e.modelo,
-        'potencia': e.potencia,
-        'tensao': e.tensao,
-      }).toList());
-    }
-
-    if (novoStatus == 'Concluída' || novoStatus == 'Aguardando Orçamento') {
-      dadosUpdate['data_conclusao'] = DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now());
+    if (relatorioFinal.isNotEmpty) {
+      dadosUpdate['observacao_tecnico'] = relatorioFinal;
     }
 
     try {
-      await _supabase.from('ordens_servico').update(dadosUpdate).eq('id', id).timeout(const Duration(seconds: 4));
-    } catch (_) {}
+      final idNum = int.tryParse(id.toString()) ?? id;
+      await _supabase.from('ordens_servico').update(dadosUpdate).eq('id', idNum).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      try {
+        await _supabase.from('ordens_servico').update(dadosUpdate).eq('id', id.toString()).timeout(const Duration(seconds: 6));
+      } catch (_) {}
+    }
+
+    // 2. Tenta atualizar colunas opcionais separadamente sem travar o status
+    if (novoStatus == 'Concluída' || novoStatus == 'Aguardando Orçamento') {
+      try {
+        final idNum = int.tryParse(id.toString()) ?? id;
+        await _supabase.from('ordens_servico').update({
+          'data_conclusao': DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
+        }).eq('id', idNum);
+      } catch (_) {}
+    }
   }
 
-  // Marca que o técnico viu o pop-up para não ficar repetindo
   static Future<void> marcarVisualizado(dynamic id) async {
     try {
-      await _supabase.from('ordens_servico').update({'visualizado_pelo_tecnico': true}).eq('id', id);
+      final idNum = int.tryParse(id.toString()) ?? id;
+      await _supabase.from('ordens_servico').update({'visualizado_pelo_tecnico': true}).eq('id', idNum);
     } catch (_) {}
   }
 }
-
-
-
