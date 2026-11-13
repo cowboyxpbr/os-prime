@@ -1,0 +1,11 @@
+{
+    "name": "O.S. Prime • Escritório",
+    "short_name": "O.S. Prime",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0B111E",
+    "theme_color": "#00D4FF",
+    "description": "Painel de Gestão e Faturamento do Escritório - O.S. Prime",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false
+}
