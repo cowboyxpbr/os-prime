@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -15,4 +16,12 @@ class ServicoArquivoUniversal {
       await Share.shareXFiles([xfile], text: texto);
     }
   }
+}
+
+ImageProvider obterImagemProvider(String caminho) {
+  return FileImage(File(caminho));
+}
+
+Widget obterWidgetImagemArquivo(String caminho, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  return Image.file(File(caminho), width: width, height: height, fit: fit);
 }

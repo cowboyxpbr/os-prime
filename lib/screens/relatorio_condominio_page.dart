@@ -1,3 +1,4 @@
+import '../servico_arquivo.dart';
 // ============================================================================
 // RELATÓRIO / LAUDO DE CAMPO E BANCADA COM IMPRESSÃO DIRETA E EXPURGO 90 DIAS
 // lib/screens/relatorio_condominio_page.dart
@@ -815,7 +816,7 @@ class _FormularioRelatorioCondominioPageState extends State<FormularioRelatorioC
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
-                                child: Image.file(File(foto.caminhoArquivo), width: 52, height: 52, fit: BoxFit.cover),
+                                child: obterWidgetImagemArquivo(foto.caminhoArquivo, width: 52, height: 52, fit: BoxFit.cover),
                               ),
                               const SizedBox(width: 8),
                               Expanded(

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 // ============================================================================
 // ARQUIVO BASE, MODELOS, CACHE OFFLINE, CORES, ONESIGNAL E ENGINE PDF
 // lib/app_base.dart (VERSÃO COMPLETA E UNIFICADA: O.S. Prime)
@@ -1526,7 +1527,7 @@ class PdfEngine {
           final arq = File(f.caminhoArquivo);
           if (arq.existsSync()) {
             final bytes = arq.readAsBytesSync();
-            final imagemPdf = pw.MemoryImage(bytes);
+            final imagemPdf = pw.MemoryImage(bytes is Uint8List ? bytes : Uint8List.fromList(bytes));
 
             fotosWidgets.add(
               pw.Column(
@@ -1693,7 +1694,7 @@ class PdfEngine {
                   child: pw.ClipRRect(
                     horizontalRadius: 4,
                     verticalRadius: 4,
-                    child: pw.Image(pw.MemoryImage(imgBytes), fit: pw.BoxFit.cover),
+                    child: pw.Image(pw.MemoryImage(imgBytes is Uint8List ? imgBytes : Uint8List.fromList(imgBytes)), fit: pw.BoxFit.cover),
                   ),
                 ),
                 pw.SizedBox(height: 3),

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 class ServicoArquivoUniversal {
@@ -12,4 +13,12 @@ class ServicoArquivoUniversal {
       await Share.shareXFiles([xfile], text: texto);
     } catch (_) {}
   }
+}
+
+ImageProvider obterImagemProvider(String caminho) {
+  return NetworkImage(caminho);
+}
+
+Widget obterWidgetImagemArquivo(String caminho, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  return Image.network(caminho, width: width, height: height, fit: fit, errorBuilder: (_, __, ___) => const Icon(Icons.image));
 }

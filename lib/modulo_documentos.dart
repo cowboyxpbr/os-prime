@@ -1,3 +1,4 @@
+import 'servico_arquivo.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 // ARQUIVO: ORÇAMENTOS COM DATA FLEXÍVEL, EQUIPAMENTOS, LAUDO E HISTÓRICO 90 DIAS
@@ -1565,7 +1566,7 @@ String? _numeroOSOrigem;
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: Colors.white24),
-                                  image: DecorationImage(image: FileImage(File(_fotos[i].caminhoArquivo)), fit: BoxFit.cover),
+                                  image: DecorationImage(image: obterImagemProvider(_fotos[i].caminhoArquivo), fit: BoxFit.cover),
                                 ),
                               ),
                               Positioned(

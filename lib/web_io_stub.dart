@@ -1,10 +1,13 @@
+import 'dart:typed_data';
+
 class File {
   final String path;
   File(this.path);
   bool existsSync() => false;
   Future<bool> exists() async => false;
-  List<int> readAsBytesSync() => [];
-  Future<List<int>> readAsBytes() async => [];
+  Future<void> delete() async {}
+  Uint8List readAsBytesSync() => Uint8List(0);
+  Future<Uint8List> readAsBytes() async => Uint8List(0);
   Future<File> writeAsBytes(List<int> bytes) async => this;
   Future<String> readAsString() async => '';
   Future<File> writeAsString(String contents) async => this;
