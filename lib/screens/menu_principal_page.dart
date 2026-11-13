@@ -1,3 +1,6 @@
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import '../servico_push.dart';
 // ============================================================================
 // ARQUIVO: MENU PRINCIPAL COM MARCA D'ÁGUA E BORDAS TRANSLÚCIDAS
 // lib/screens/menu_principal_page.dart
@@ -50,12 +53,102 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
   int _pendentesOffline = 0;
   StreamSubscription? _vigilanteSessaoSub;
 
+  Timer? _timerAlarmeGlobal;
+  final Set<String> _alarmesJaTocados = {};
+
   @override
   void initState() {
     super.initState();
     _sincronizar();
     _iniciarVigilanteSessao();
     _verificarLicenca();
+    _renovarPushOneSignal();
+    _iniciarRelogioAlarmesNotas();
+  }
+
+  Future<void> _renovarPushOneSignal() async {
+    try {
+      final uLimpo = widget.usuarioLogado.usuario.trim().toLowerCase().replaceAll('@', '');
+      await ServicoPushApp.login(uLimpo, widget.usuarioLogado.nome.trim().toLowerCase(), widget.usuarioLogado.cargo);
+    } catch (_) {}
+  }
+
+  void _iniciarRelogioAlarmesNotas() {
+    _timerAlarmeGlobal?.cancel();
+    _timerAlarmeGlobal = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted) return;
+      try {
+        final notas = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioLogado.usuario);
+        final todas = await CacheOffline.carregarNotasLocal();
+        final uniao = [...notas, ...todas];
+        final agora = DateTime.now();
+
+        for (final n in uniao) {
+          if (!n.dataHora.contains('🔔 ALARME:')) continue;
+          final chaveUnica = "${n.id}_${n.dataHora}";
+          if (_alarmesJaTocados.contains(chaveUnica)) continue;
+
+          final parte = n.dataHora.split('🔔 ALARME:').last.trim();
+          final dtAlarme = DateFormat('dd/MM/yyyy HH:mm').parse(parte);
+          final diffSeg = agora.difference(dtAlarme).inSeconds;
+
+          // Toca quando chega no minuto programado (ate 15 min depois caso o app estivesse fechado)
+          if (diffSeg >= 0 && diffSeg <= 900) {
+            _alarmesJaTocados.add(chaveUnica);
+            HapticFeedback.heavyImpact();
+            SystemSound.play(SystemSoundType.alert);
+            if (!mounted) return;
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: corCardFundo,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: const BorderSide(color: Colors.amberAccent, width: 2.2),
+                ),
+                title: const Row(
+                  children: [
+                    Icon(Icons.alarm_on_rounded, color: Colors.amberAccent, size: 28),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text('⏰ ALARME DE EVENTO!', style: TextStyle(color: Colors.amberAccent, fontSize: 17, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(n.titulo, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text('Horário programado: $parte', style: const TextStyle(color: corCianoEletrico, fontSize: 12, fontWeight: FontWeight.bold)),
+                    if (n.conteudo.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(8)),
+                        child: Text(n.conteudo, style: const TextStyle(color: corTextoClaro, fontSize: 13.5)),
+                      ),
+                    ],
+                  ],
+                ),
+                actions: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black),
+                    icon: const Icon(Icons.notifications_off_rounded, size: 18),
+                    label: const Text('DESLIGAR ALARME', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            );
+            break;
+          }
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _verificarLicenca() async {
@@ -93,6 +186,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
   @override
   void dispose() {
     _vigilanteSessaoSub?.cancel();
+    _timerAlarmeGlobal?.cancel();
     super.dispose();
   }
 
@@ -116,6 +210,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
 
         if (foiExcluido || senhaAlterada) {
           _vigilanteSessaoSub?.cancel();
+    _timerAlarmeGlobal?.cancel();
           await CacheOffline.excluirUsuarioLocal(widget.usuarioLogado.usuario);
           await CacheOffline.encerrarSessao();
 
@@ -712,6 +807,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
       if (conf == true && mounted) {
         try {
           await _vigilanteSessaoSub?.cancel();
+    _timerAlarmeGlobal?.cancel();
         } catch (_) {}
         await CacheOffline.encerrarSessao();
         if (mounted) {

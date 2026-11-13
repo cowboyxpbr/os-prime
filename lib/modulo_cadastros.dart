@@ -383,6 +383,9 @@ class _TelaNotasState extends State<TelaNotas> {
       final lista = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioKey);
       lista.removeWhere((item) => item.id == n.id);
       await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
+    if (_alarmeSelecionado != null) {
+      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(tituloNota: t.isEmpty ? 'Lembrete / Evento' : t, conteudoNota: c, dataAlarmeLocal: _alarmeSelecionado!);
+    }
       _carregar();
     }
   }
@@ -591,6 +594,9 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
     lista.insert(0, NotaApp(id: idNota, titulo: t.isEmpty ? 'Lembrete / Evento' : t, conteudo: c, dataHora: dataHoraFinal));
 
     await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
+    if (_alarmeSelecionado != null) {
+      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(tituloNota: t.isEmpty ? 'Lembrete / Evento' : t, conteudoNota: c, dataAlarmeLocal: _alarmeSelecionado!);
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -602,6 +608,9 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
     final lista = await CacheOffline.carregarNotasLocal(usuarioKey: widget.usuarioKey);
     lista.removeWhere((n) => n.id == widget.nota!.id);
     await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
+    if (_alarmeSelecionado != null) {
+      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(tituloNota: t.isEmpty ? 'Lembrete / Evento' : t, conteudoNota: c, dataAlarmeLocal: _alarmeSelecionado!);
+    }
     if (mounted) Navigator.pop(context);
   }
 

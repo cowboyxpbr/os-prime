@@ -587,15 +587,30 @@ class ServicoNotificacaoOneSignal {
     required String titulo,
     required String mensagem,
     Map<String, dynamic>? dados,
+    String? sendAfterUtc,
   }) async {
-    final destinos = logins
-        .map((l) => l.trim().toLowerCase().replaceAll('@', ''))
-        .where((l) => l.isNotEmpty)
-        .toSet()
-        .toList();
+    final Set<String> destinos = {};
+    for (final l in logins) {
+      final limpo = l.trim().toLowerCase().replaceAll('@', '');
+      if (limpo.isNotEmpty) destinos.add(limpo);
+    }
+
+    // Busca tambem o login e nome no banco para garantir entrega mesmo se passaram apenas o nome
+    try {
+      final resUsers = await supabase.from('usuarios').select('usuario, nome');
+      for (final u in resUsers) {
+        final uLogin = (u['usuario'] ?? '').toString().trim().toLowerCase().replaceAll('@', '');
+        final uNome = (u['nome'] ?? '').toString().trim().toLowerCase();
+        if (destinos.contains(uNome) && uLogin.isNotEmpty) {
+          destinos.add(uLogin);
+        }
+      }
+    } catch (_) {}
 
     if (destinos.isEmpty) return;
+    final listaDestinos = destinos.toList();
 
+    // 1. Disparo por Alias (external_id)
     try {
       final client = HttpClient();
       final request = await client.postUrl(Uri.parse('https://api.onesignal.com/notifications'));
@@ -605,32 +620,75 @@ class ServicoNotificacaoOneSignal {
       final payload = {
         'app_id': _appId,
         'target_channel': 'push',
-        'include_aliases': {'external_id': destinos},
+        'include_aliases': {'external_id': listaDestinos},
         'headings': {'pt': titulo, 'en': titulo},
         'contents': {'pt': mensagem, 'en': mensagem},
-        'small_icon': 'ic_launcher',
-        'large_icon': 'ic_launcher',
-        'android_accent_color': 'FF00D4FF',
         'priority': 10,
         'android_visibility': 1,
         'android_sound': 'default',
         'ios_sound': 'default',
-        'ios_badgeType': 'Increase',
-        'ios_badgeCount': 1,
+        if (sendAfterUtc != null) 'send_after': sendAfterUtc,
         if (dados != null) 'data': dados,
       };
 
       request.add(utf8.encode(jsonEncode(payload)));
       final response = await request.close();
-      final responseBody = await response.transform(utf8.decoder).join();
-
-      debugPrint("🔔 Push OneSignal (${response.statusCode}): $responseBody");
+      await response.transform(utf8.decoder).join();
       client.close();
-    } catch (e) {
-      debugPrint("❌ Erro ao enviar notificação OneSignal: $e");
+    } catch (_) {}
+
+    // 2. Disparo garantido por TAG (usuario ou nome)
+    for (final dest in listaDestinos) {
+      try {
+        final client = HttpClient();
+        final request = await client.postUrl(Uri.parse('https://api.onesignal.com/notifications'));
+        request.headers.set('Content-Type', 'application/json; charset=utf-8');
+        request.headers.set('Authorization', 'Key $_restApiKey');
+
+        final payloadTag = {
+          'app_id': _appId,
+          'target_channel': 'push',
+          'filters': [
+            {'field': 'tag', 'key': 'usuario', 'relation': '=', 'value': dest},
+            {'operator': 'OR'},
+            {'field': 'tag', 'key': 'nome', 'relation': '=', 'value': dest},
+          ],
+          'headings': {'pt': titulo, 'en': titulo},
+          'contents': {'pt': mensagem, 'en': mensagem},
+          'priority': 10,
+          'android_visibility': 1,
+          'android_sound': 'default',
+          'ios_sound': 'default',
+          if (sendAfterUtc != null) 'send_after': sendAfterUtc,
+          if (dados != null) 'data': dados,
+        };
+
+        request.add(utf8.encode(jsonEncode(payloadTag)));
+        final response = await request.close();
+        await response.transform(utf8.decoder).join();
+        client.close();
+      } catch (_) {}
     }
   }
 
+  static Future<void> agendarAlarmeNotaPush({
+    required String tituloNota,
+    required String conteudoNota,
+    required DateTime dataAlarmeLocal,
+  }) async {
+    try {
+      final sessao = await CacheOffline.obterSessaoAtiva();
+      if (sessao == null) return;
+      final utcStr = dataAlarmeLocal.toUtc().toIso8601String();
+      await _dispararREST(
+        logins: [sessao.usuario, sessao.nome],
+        titulo: '⏰ ALARME DE EVENTO: $tituloNota',
+        mensagem: conteudoNota.isNotEmpty ? conteudoNota : 'Horário programado atingido!',
+        sendAfterUtc: utcStr,
+        dados: {'tipo': 'alarme_nota', 'titulo': tituloNota},
+      );
+    } catch (_) {}
+  }
   // 1. NOTIFICAÇÃO DE CHAT COM ÍCONE DO APP
   static Future<void> enviarNotificacaoChat({
     required String destinatarioLogin,

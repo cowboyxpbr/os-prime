@@ -379,7 +379,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                 const SizedBox(height: 8),
                 TextField(controller: foneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone / WhatsApp *', isDense: true)),
                 const SizedBox(height: 8),
-                TextField(controller: endCtrl, decoration: const InputDecoration(labelText: 'Endereço Completo', isDense: true)),
+                TextField(controller: endCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Endereço Completo', isDense: true)),
                 const SizedBox(height: 8),
                 TextField(controller: docCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'CPF ou CNPJ (Opcional)', isDense: true)),
               ],
@@ -399,59 +399,77 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                 final doc = docCtrl.text.trim();
 
                 if (nome.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('Informe o nome do cliente.')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Informe o nome do cliente.')));
                   return;
                 }
 
                 setDialogState(() => salvando = true);
+
+                // 1. Preenche os campos da O.S. imediatamente
+                setM(() {
+                  cC.text = nome;
+                  fC.text = fone;
+                  eC.text = endereco;
+                });
+
+                String idGerado = DateTime.now().millisecondsSinceEpoch.toString();
+
+                // 2. Tenta gravar no Supabase convertendo o id para String com seguranca
                 try {
-                  final payload = {
+                  final res = await supabase.from('clientes').insert({
                     'nome': nome,
                     'telefone': fone,
                     'endereco': endereco,
                     'cpf_cnpj': doc,
                     'documento': doc,
-                  };
+                  }).select().maybeSingle().timeout(const Duration(seconds: 5));
+                  if (res != null && res['id'] != null) {
+                    idGerado = res['id'].toString();
+                  }
+                } catch (_) {
+                  try {
+                    final res2 = await supabase.from('clientes').insert({
+                      'nome': nome,
+                      'telefone': fone,
+                      'endereco': endereco,
+                    }).select().maybeSingle().timeout(const Duration(seconds: 4));
+                    if (res2 != null && res2['id'] != null) {
+                      idGerado = res2['id'].toString();
+                    }
+                  } catch (_) {}
+                }
 
-                  final res = await supabase.from('clientes').insert(payload).select().maybeSingle().timeout(const Duration(seconds: 5));
+                // 3. Salva no cache local do aparelho
+                try {
                   final novo = DadosCliente(
-                    id: res != null ? res['id'] : null,
+                    id: idGerado,
                     nome: nome,
                     telefone: fone,
                     endereco: endereco,
                     documento: doc,
                   );
-
                   final listaAtual = await CacheOffline.carregarClientesLocal();
-                  listaAtual.add(novo);
+                  listaAtual.removeWhere((c) => c.nome.trim().toLowerCase() == nome.toLowerCase());
+                  listaAtual.insert(0, novo);
                   await CacheOffline.salvarClientesLocal(listaAtual);
+                } catch (_) {}
 
-                  setM(() {
-                    cC.text = nome;
-                    fC.text = fone;
-                    eC.text = endereco;
-                  });
-
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('✅ Cliente cadastrado e vinculado à O.S.!')));
-                  }
-                } catch (e) {
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao cadastrar: ')));
-                  }
-                } finally {
-                  if (ctx.mounted) setDialogState(() => salvando = false);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(backgroundColor: Colors.green, content: Text('✅ Cliente salvo e puxado para a O.S.!')),
+                  );
                 }
               },
-              child: salvando ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)) : const Text('Salvar e Usar', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: salvando
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Text('Salvar e Usar', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
       ),
     );
   }
-
   void _buscarClientesParaOS(
     TextEditingController cC,
     TextEditingController eC,
@@ -656,6 +674,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   tecnicoLogin: loginTecnico,
                   numeroOS: numOS,
                   cliente: cC.text.trim(),
+                  categoria: prioridadeSel,
                 );
 
                 if (ctx.mounted) Navigator.pop(ctx);
