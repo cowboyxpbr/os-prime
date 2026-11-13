@@ -1156,26 +1156,24 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _cardCompacto(
-                                    "Trabalho sem O.S",
-                                    "Serviço de campo",
-                                    Icons.build_circle_rounded,
-                                    corCianoEletrico,
-                                    () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => TelaLancamentoTrabalhoFuncionario(
-                                          usuarioLogado: widget.usuarioLogado,
-                                          modoAdmin: false,
-                                        ),
-                                      ),
-                                    ).then((_) => _sincronizar()),
+                            _cardHorizontal(
+                              "Trabalho sem O.S",
+                              "Serviço executado de campo",
+                              Icons.build_circle_rounded,
+                              corCianoEletrico,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TelaLancamentoTrabalhoFuncionario(
+                                    usuarioLogado: widget.usuarioLogado,
+                                    modoAdmin: false,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                              ).then((_) => _sincronizar()),
+                            ),
+                            _tituloSecao("DOCUMENTOS & LAUDOS TÉCNICOS"),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: _cardCompacto(
                                     "Orçamento",
@@ -1188,22 +1186,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                              ],
-                            ),
-                            _tituloSecao("DOCUMENTOS & LAUDOS TÉCNICOS"),
-                            _cardHorizontal(
-                              "Relatórios de Condomínio",
-                              "Laudos periciais com equipamentos, até 10 fotos e WhatsApp",
-                              Icons.apartment_rounded,
-                              corCianoEletrico,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => TelaRelatoriosCondominio(usuarioLogado: widget.usuarioLogado)),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: _cardCompacto(
                                     "Recibo",
@@ -1216,7 +1199,22 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _cardHorizontal(
+                              "Relatórios de Condomínio",
+                              "Laudos periciais com equipamentos, até 10 fotos e WhatsApp",
+                              Icons.apartment_rounded,
+                              corCianoEletrico,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => TelaRelatoriosCondominio(usuarioLogado: widget.usuarioLogado)),
+                              ),
+                            ),
+                            _tituloSecao("CADASTROS & CONTROLE"),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: _cardCompacto(
                                     "Clientes",
@@ -1229,9 +1227,22 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     ),
                                   ),
                                 ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _cardCompacto(
+                                    "Diário / Notas",
+                                    "Anotações & Alarme",
+                                    Icons.note_alt_rounded,
+                                    corRoxoNotas,
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const TelaNotas()),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
-                            _tituloSecao("CADASTROS & CONTROLE"),
+                            const SizedBox(height: 8),
                             _cardHorizontal(
                               "Meu Histórico e Relatório",
                               "Prestação de contas e histórico de produção",
@@ -1241,36 +1252,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                 context,
                                 MaterialPageRoute(builder: (_) => TelaHistoricoFuncionario(usuarioLogado: widget.usuarioLogado)),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _cardCompacto(
-                                    "Diário / Notas",
-                                    "Anotações",
-                                    Icons.note_alt_rounded,
-                                    corRoxoNotas,
-                                    () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const TelaNotas()),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _cardCompacto(
-                                    "Bate-Papo",
-                                    "Equipe",
-                                    Icons.chat_rounded,
-                                    corCianoSuave,
-                                    () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => TelaChat(usuarioLogado: widget.usuarioLogado)),
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ),
                             const SizedBox(height: 20),
                           ],
