@@ -1,4 +1,4 @@
-﻿import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 // ARQUIVO: ORÇAMENTOS COM DATA FLEXÍVEL, EQUIPAMENTOS, LAUDO E HISTÓRICO 90 DIAS
 // lib/modulo_documentos.dart
@@ -766,7 +766,7 @@ String? _numeroOSOrigem;
           .order('id', ascending: false)
           .timeout(const Duration(seconds: 4));
       pendentes = List<Map<String, dynamic>>.from(res)
-          .where((s) => (s['status'] ?? '').toString().trim() == 'Aguardando Orçamento')
+          .where((s) { final st = (s['status'] ?? '').toString().trim().toLowerCase(); return st != 'faturada' && st != 'cancelada' && !st.contains('exclu'); })
           .toList();
     } catch (_) {}
 
@@ -1384,44 +1384,286 @@ String? _numeroOSOrigem;
                     ),
                   ],
 
-                  // LINHA 2 PARA O RECIBO: SALVAR NO FATURAMENTO
-                  if (isRecibo) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 38,
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(foregroundColor: corCianoSuave, visualDensity: VisualDensity.compact),
-                        icon: const Icon(Icons.cloud_upload_outlined, size: 16),
-                        label: const Text('Salvar no Faturamento', style: TextStyle(fontSize: 12)),
-                        onPressed: () async {
-                          if (_clienteAtual == null || _itens.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Selecione o cliente e adicione itens!')));
-                            return;
-                          }
-                          final dados = {
-                            'cliente': _clienteAtual!.nome,
-                            'telefone': _clienteAtual!.telefone,
-                            'cpf_cnpj': _clienteAtual!.documento,
-                            'endereco': _clienteAtual!.enderecoCompleto,
-                            'titulo_destaque': _destaqueCtrl.text.trim(),
-                            'descricao': _itens.map((e) => "${e.quantidade % 1 == 0 ? e.quantidade.toInt() : e.quantidade}x ${e.descricao} (R\$ ${e.valorUnitario.toStringAsFixed(2)})").join(' | '),
-                            'quantidade': 1,
-                            'valor_unitario': _totalGeral,
-                            'status': 'Faturado',
-                            'tecnico': 'Escritório',
-                            'data': _dataDocCtrl.text.trim(),
-                          };
-                          try {
-                            await supabase.from('servicos').insert(dados).timeout(const Duration(seconds: 10));
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('✅ Salvo no faturamento com sucesso!')));
-                          } catch (e) {
-                            await CacheOffline.salvarServicoFilaOffline(dados);
-                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('⚠️ Salvo offline: $e')));
-                          }
-                        },
+                                    // ============================================================
+                  // 1. EQUIPAMENTOS EM AVALIAÇÃO (ORÇAMENTO)
+                  // ============================================================
+                  if (isOrcamento) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Equipamentos Avaliados:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoEletrico)),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: corCianoEletrico,
+                            foregroundColor: Colors.black,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          ),
+                          icon: const Icon(Icons.add, size: 14),
+                          label: const Text('+ Equipamento', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          onPressed: () => _modalEquipamentoDialog(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (_equipamentos.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(8)),
+                        child: const Center(
+                          child: Text('Nenhum equipamento vinculado (opcional).', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                        ),
+                      )
+                    else
+                      ..._equipamentos.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final eq = entry.value;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          color: const Color(0xFF142030),
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.settings, color: corCianoEletrico, size: 18),
+                            title: Text(eq.tipo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: corTextoClaro)),
+                            subtitle: Text("${eq.marca} • ${eq.modelo} • ${eq.potencia} • ${eq.tensao}", style: const TextStyle(color: corCianoSuave, fontSize: 10.5)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.edit, size: 15, color: corCianoSuave), onPressed: () => _modalEquipamentoDialog(i)),
+                                IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.delete, size: 15, color: Colors.redAccent), onPressed: () => setState(() => _equipamentos.removeAt(i))),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _laudoCampoCtrl,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Parecer Técnico / Laudo Descritivo',
+                        hintText: 'Descreva a análise técnica e o diagnóstico...',
+                        alignLabelWithHint: true,
                       ),
                     ),
                   ],
+
+                  // ============================================================
+                  // 2. PEÇAS & SERVIÇOS (ITENS COM VALORES)
+                  // ============================================================
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Peças & Serviços:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corCianoEletrico)),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: corCianoEletrico,
+                          foregroundColor: Colors.black,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('Adicionar Item', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () => _abrirPopupItem(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (_itens.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(8)),
+                      child: const Center(
+                        child: Text('Nenhum item adicionado ainda.\nToque em "+ Adicionar Item" para lançar peças ou mão de obra.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 11)),
+                      ),
+                    )
+                  else
+                    ..._itens.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final it = entry.value;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        child: ListTile(
+                          dense: true,
+                          title: Text(it.descricao, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: corTextoClaro)),
+                          subtitle: Text(
+                            "${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade}x • Unit: R$ ${it.valorUnitario.toStringAsFixed(2)} • Subtotal: R$ ${it.subtotal.toStringAsFixed(2)}",
+                            style: const TextStyle(color: corCianoSuave, fontSize: 11),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.edit, size: 16, color: corCianoSuave), onPressed: () => _abrirPopupItem(i)),
+                              IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.delete, size: 16, color: Colors.redAccent), onPressed: () => setState(() => _itens.removeAt(i))),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+
+                  // ============================================================
+                  // 3. FAIXA TOTAL GERAL
+                  // ============================================================
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF142030),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: corCianoEletrico.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('TOTAL GERAL:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                        Text(
+                          moeda.format(_totalGeral),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: corCianoEletrico),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ============================================================
+                  // 4. ANEXAR FOTOS DE CAMPO
+                  // ============================================================
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Fotos Anexadas (${_fotos.length}):", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoEletrico)),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: corCianoEletrico),
+                          foregroundColor: corCianoEletrico,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.camera_alt, size: 14),
+                        label: const Text('+ Anexar Fotos', style: TextStyle(fontSize: 11)),
+                        onPressed: _modalEscolherOrigemFoto,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (_fotos.isNotEmpty)
+                    SizedBox(
+                      height: 85,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _fotos.length,
+                        itemBuilder: (ctx, i) {
+                          return Stack(
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                width: 85,
+                                height: 85,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.white24),
+                                  image: DecorationImage(image: FileImage(File(_fotos[i].caminhoArquivo)), fit: BoxFit.cover),
+                                ),
+                              ),
+                              Positioned(
+                                top: 2,
+                                right: 10,
+                                child: InkWell(
+                                  onTap: () => setState(() => _fotos.removeAt(i)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                    child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+
+                  // ============================================================
+                  // 5. OBSERVAÇÕES / GARANTIA
+                  // ============================================================
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _obsCtrl,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Observações Gerais / Condições / Garantia',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+
+                  // ============================================================
+                  // 6. BOTÕES DE AÇÃO (SALVAR, IMPRIMIR E WHATSAPP)
+                  // ============================================================
+                  const SizedBox(height: 16),
+                  if (isOrcamento) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1A365D),
+                          foregroundColor: corCianoEletrico,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          side: const BorderSide(color: corCianoEletrico),
+                        ),
+                        icon: const Icon(Icons.save_rounded, size: 18),
+                        label: const Text('SALVAR ORÇAMENTO NO HISTÓRICO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: () => _salvarOrcamentoNaLista(mostrarFeedback: true),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1F242C),
+                              foregroundColor: Colors.amberAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              side: const BorderSide(color: Colors.amberAccent),
+                            ),
+                            icon: _gerandoPdf
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent))
+                                : const Icon(Icons.print, size: 16),
+                            label: const Text('Imprimir PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: _gerandoPdf ? null : () => _dispararImpressaoOuCompartilhamento(true),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: corVerdeWhats,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: _gerandoPdf
+                                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.share, size: 16),
+                            label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: _gerandoPdf ? null : () => _dispararImpressaoOuCompartilhamento(false),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 25),
                 ],
               ),
             ),
@@ -1431,6 +1673,3 @@ String? _numeroOSOrigem;
     );
   }
 }
-
-
-

@@ -191,7 +191,44 @@ class _PainelSuperAdminPageState extends State<PainelSuperAdminPage> {
     _usuariosStream = supabase.from('usuarios').stream(primaryKey: ['id']).order('nome');
   }
 
-  Future<void> _aplicarPlanoEmpresa(Map<String, dynamic> emp, String plano, int dias) async {
+    Future<void> _aplicarPlanoEmpresa(Map<String, dynamic> emp, String plano, int dias) async {
+    final nome = emp['nome'] ?? 'Empresa';
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF121A28),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Colors.amberAccent),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_user_rounded, color: Colors.amberAccent, size: 22),
+            SizedBox(width: 8),
+            Text('Confirmar Plano', style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Deseja definir o plano $plano ($dias dias a partir de hoje) para a empresa "$nome"?',
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirmar', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
     final id = emp['id'];
     final chaveAtual = (emp['chave_licenca'] ?? '').toString().trim();
     final sufixo = chaveAtual.isNotEmpty && chaveAtual.split('-').length >= 3
@@ -199,14 +236,8 @@ class _PainelSuperAdminPageState extends State<PainelSuperAdminPage> {
         : (1000 + Random().nextInt(8999)).toString();
     final novaChave = 'PRIME-$plano-$sufixo';
 
-    DateTime base = DateTime.now();
-    if (emp['validade'] != null) {
-      final valAtual = DateTime.tryParse(emp['validade'].toString());
-      if (valAtual != null && valAtual.isAfter(DateTime.now())) {
-        base = valAtual;
-      }
-    }
-    final novaValidade = base.add(Duration(days: dias)).toUtc().toIso8601String();
+    // Prazo FIXO a partir de hoje (não acumula em cima de dias anteriores)
+    final novaValidade = DateTime.now().add(Duration(days: dias)).toUtc().toIso8601String();
 
     try {
       await supabase.from('empresas').update({
@@ -219,7 +250,7 @@ class _PainelSuperAdminPageState extends State<PainelSuperAdminPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.green,
-            content: Text('✅ Plano $plano (+$dias dias) LIBERADO para ${emp['nome']}!'),
+            content: Text('✅ Plano $plano ($dias dias) definido para $nome!'),
           ),
         );
       }
@@ -233,6 +264,49 @@ class _PainelSuperAdminPageState extends State<PainelSuperAdminPage> {
   }
 
   Future<void> _alternarStatusEmpresa(Map<String, dynamic> emp, String novoStatus) async {
+    final nome = emp['nome'] ?? 'Empresa';
+    final isAtivando = novoStatus == 'ativo';
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF121A28),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: isAtivando ? Colors.greenAccent : Colors.redAccent),
+        ),
+        title: Row(
+          children: [
+            Icon(isAtivando ? Icons.check_circle_outline : Icons.block_rounded, color: isAtivando ? Colors.greenAccent : Colors.redAccent, size: 22),
+            SizedBox(width: 8),
+            Text(isAtivando ? 'Liberar Acesso?' : 'Suspender Uso?', style: TextStyle(color: isAtivando ? Colors.greenAccent : Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          isAtivando
+              ? 'Tem certeza que deseja LIBERAR o acesso da empresa "$nome"?'
+              : 'Tem certeza que deseja SUSPENDER o acesso da empresa "$nome"? O aplicativo deles será bloqueado imediatamente.',
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isAtivando ? Colors.green : Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isAtivando ? 'Sim, Liberar' : 'Sim, Suspender', style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
     try {
       final Map<String, dynamic> dados = {'status': novoStatus};
       if (novoStatus == 'ativo' && emp['validade'] == null) {
@@ -247,8 +321,8 @@ class _PainelSuperAdminPageState extends State<PainelSuperAdminPage> {
             backgroundColor: novoStatus == 'ativo' ? Colors.green : Colors.redAccent,
             content: Text(
               novoStatus == 'ativo'
-                  ? '✅ Acesso LIBERADO para ${emp['nome']}!'
-                  : '🚫 Acesso SUSPENSO para ${emp['nome']}!',
+                  ? '✅ Acesso LIBERADO para $nome!'
+                  : '🚫 Acesso SUSPENSO para $nome!',
             ),
           ),
         );
