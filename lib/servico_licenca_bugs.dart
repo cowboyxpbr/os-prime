@@ -38,6 +38,35 @@ class ServicoLicencaBugs {
     }
   }
 
+  static Stream<List<Map<String, dynamic>>> streamTabelaSegura(
+    String tabela, {
+    String? orderBy,
+    bool ascending = true,
+    int? limit,
+  }) async* {
+    String ultimoJson = '';
+    while (true) {
+      try {
+        dynamic query = supabase.from(tabela).select();
+        if (orderBy != null) {
+          query = query.order(orderBy, ascending: ascending);
+        }
+        if (limit != null) {
+          query = query.limit(limit);
+        }
+        final res = await query.timeout(const Duration(seconds: 6));
+        final lista = List<Map<String, dynamic>>.from(res as List);
+        final novoJson = jsonEncode(lista);
+
+        if (novoJson != ultimoJson) {
+          ultimoJson = novoJson;
+          yield lista;
+        }
+      } catch (_) {}
+      await Future.delayed(const Duration(seconds: 8));
+    }
+  }
+
   static void inicializarCapturaDeErrosGlobal() {
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
@@ -58,14 +87,14 @@ class ServicoLicencaBugs {
     };
   }
 
-    static Future<void> registrarErroOuBug({
+  static Future<void> registrarErroOuBug({
     required String erro,
     String detalhes = '',
     String tipo = 'MANUAL',
     String? usuarioInformado,
     String? empresaInformada,
   }) async {
-    // 🛡️ Filtra e bloqueia avisos de Realtime de usuarios e conexao
+    // 🛡️ Filtra e bloqueia avisos de Realtime de usuarios e oscilacoes de conexao
     final eLower = erro.toLowerCase();
     if (eLower.contains('realtimesubscribe') ||
         eLower.contains('channelerror') ||
@@ -74,12 +103,8 @@ class ServicoLicencaBugs {
         eLower.contains('handshake') ||
         eLower.contains('timed out')) {
       return;
-    }required String erro,
-    String detalhes = '',
-    String tipo = 'MANUAL',
-    String? usuarioInformado,
-    String? empresaInformada,
-  }) async {
+    }
+
     try {
       if (tipo != 'MANUAL' && tipo != 'NOVO_CADASTRO' && _ultimoErroEnviado != null) {
         if (DateTime.now().difference(_ultimoErroEnviado!).inSeconds < 20) {
@@ -497,10 +522,7 @@ class _MonitorLicencaMasterWidgetState extends State<MonitorLicencaMasterWidget>
 
   void _iniciarEscutaEmpresa() {
     try {
-      _sub = supabase
-          .from('empresas')
-          .stream(primaryKey: ['id'])
-          .listen((lista) {
+      _sub = ServicoLicencaBugs.streamTabelaSegura('empresas').listen((lista) {
         if (lista.isEmpty || !mounted) return;
         _processarDadosEmpresa(lista.first);
       });
