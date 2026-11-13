@@ -1,14 +1,9 @@
-name: Compilar APKs e Publicar Web
+name: Compilar APKs e Painel Web
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
 
 jobs:
   build:
@@ -84,36 +79,23 @@ jobs:
           flutter build apk --release -t lib/main_admin.dart --build-number=${{ github.run_number }}
           cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
 
-      - name: 7. Disponibilizar APK Comercial para Download
+      - name: 7. Compilar Versão Web para Escritório
+        run: flutter build web --release
+
+      - name: 8. Disponibilizar APK Comercial para Download
         uses: actions/upload-artifact@v4
         with:
           name: 1-APK-COMERCIAL-EMPRESAS-v${{ github.run_number }}
           path: apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
-      - name: 8. Disponibilizar APK Gerenciador para Download
+      - name: 9. Disponibilizar APK Gerenciador para Download
         uses: actions/upload-artifact@v4
         with:
           name: 2-APK-GERENCIADOR-DONO-v${{ github.run_number }}
           path: apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
 
-      - name: 9. Compilar Versão Web para Escritório
-        run: flutter build web --release --base-href "/os-prime/"
-
-      - name: 10. Enviar Arquivos Web para o GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+      - name: 10. Disponibilizar Painel Web para Escritório
+        uses: actions/upload-artifact@v4
         with:
+          name: 3-PAINEL-WEB-ESCRITORIO-v${{ github.run_number }}
           path: build/web
-
-  deploy-web:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: 11. Publicar no GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
