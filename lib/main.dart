@@ -6,11 +6,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'servico_push.dart';
 
 import 'app_base.dart';
 import 'screens/menu_principal_page.dart';
 import 'servico_licenca_bugs.dart';
+import 'servico_push.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,9 +18,8 @@ void main() async {
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
   ServicoLicencaBugs.inicializarCapturaDeErrosGlobal();
 
-  // CONFIGURAÇÃO ONESIGNAL (COM SOM E PERMISSÃO ATIVA - ID CORRIGIDO COM 4708)
-  try {
-    ServicoPushApp.inicializar();
+  // INICIALIZAÇÃO PUSH UNIVERSAL (MOBILE + WEB)
+  await ServicoPushApp.inicializar();
 
   final usuario = await CacheOffline.obterSessaoAtiva();
 
@@ -28,6 +27,7 @@ void main() async {
     try {
       final userLimpo = usuario.usuario.trim().toLowerCase().replaceAll('@', '');
       await ServicoPushApp.login(userLimpo, usuario.nome.trim().toLowerCase(), usuario.cargo);
+    } catch (_) {}
   }
 
   runApp(MaterialApp(
@@ -177,6 +177,7 @@ class _TelaLoginState extends State<TelaLogin> {
       try {
         final loginOneSignal = autenticado.usuario.trim().toLowerCase().replaceAll('@', '');
         await ServicoPushApp.login(loginOneSignal, autenticado.nome.trim().toLowerCase(), autenticado.cargo);
+      } catch (_) {}
 
       await CacheOffline.salvarSessao(autenticado, _manterLogado);
       if (mounted) {
