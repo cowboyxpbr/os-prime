@@ -1,4 +1,4 @@
-﻿import 'package:intl/intl.dart';
+import 'package:intl/intl.dart';
 // ============================================================================
 // ARQUIVO: TELA DE O.S. DO TÉCNICO COM ACESSO RÍGIDO INDIVIDUAL E SIGILO TOTAL
 // lib/screens/os_funcionario_page.dart (VERSÃO OFICIAL: O.S. Prime)
@@ -352,13 +352,30 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
               }
               final relatorio = relatorioC.text.trim();
 
-              final statusNovo = paraOrcamento ? 'Aguardando Orçamento' : 'Concluída';
+                            final statusNovo = paraOrcamento ? 'Aguardando Orçamento' : 'Concluída';
               await ServicoOS.atualizarStatus(
                 id: os.id,
                 novoStatus: statusNovo,
                 relatorioTecnico: relatorio,
                 equipamentos: os.equipamentos,
               );
+
+              // 🚀 ENVIA DIRETO PARA O FATURAMENTO AGUARDANDO PRECIFICAÇÃO
+              if (!paraOrcamento) {
+                try {
+                  await Supabase.instance.client.from('servicos').insert({
+                    'cliente': os.cliente,
+                    'telefone': os.telefone,
+                    'endereco': os.endereco,
+                    'descricao': "[${os.numeroOS}] $relatorio",
+                    'quantidade': 1,
+                    'valor_unitario': 0.0,
+                    'status': 'Pendente',
+                    'tecnico': widget.usuarioLogado.nome,
+                    'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
+                  });
+                } catch (_) {}
+              }
 
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {

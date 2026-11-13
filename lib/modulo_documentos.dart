@@ -1490,7 +1490,7 @@ String? _numeroOSOrigem;
                           dense: true,
                           title: Text(it.descricao, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: corTextoClaro)),
                           subtitle: Text(
-                            "${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade}x • Unit: R$ ${it.valorUnitario.toStringAsFixed(2)} • Subtotal: R$ ${it.subtotal.toStringAsFixed(2)}",
+                            "${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade}x • Unit: R\$ ${it.valorUnitario.toStringAsFixed(2)} • Subtotal: R\$ ${it.subtotal.toStringAsFixed(2)}",
                             style: const TextStyle(color: corCianoSuave, fontSize: 11),
                           ),
                           trailing: Row(

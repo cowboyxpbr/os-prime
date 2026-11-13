@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // ARQUIVO: FATURAMENTO NA NUVEM E RELATÓRIO CONSOLIDADO SEPARADO
 // lib/modulo_financeiro.dart
 // ============================================================================
@@ -150,6 +150,114 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+    // ==========================================================================
+  // DEVOLVER O.S. AO TÉCNICO (GARANTIA / RETRABALHO) DIRETO DO FATURAMENTO
+  // ==========================================================================
+  void _modalDevolverOS(Map<String, dynamic> servico) {
+    final desc = (servico['descricao'] ?? '').toString();
+    final regexOS = RegExp(r'\[(OS-[^\]]+|O\.S\.[^\]]+)\]', caseSensitive: false);
+    final match = regexOS.firstMatch(desc);
+    final numOS = match != null ? match.group(1) : null;
+
+    final motivoC = TextEditingController();
+    String tipoEtiqueta = 'GARANTIA';
+    bool enviando = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          backgroundColor: corCardFundo,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Colors.orangeAccent),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.replay_circle_filled, color: Colors.orangeAccent, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corTextoClaro)),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Cliente: ${servico['cliente'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoSuave)),
+                if (numOS != null) Text("Ref: $numOS", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 10),
+                const Text('Motivo da Devolução:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: ['GARANTIA', 'RETRABALHO', 'AJUSTE'].map((t) {
+                    final sel = tipoEtiqueta == t;
+                    return ChoiceChip(
+                      label: Text(t, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
+                      selected: sel,
+                      selectedColor: Colors.orangeAccent,
+                      backgroundColor: corCardFundo,
+                      onSelected: (v) { if (v) setD(() => tipoEtiqueta = t); },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: motivoC,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Instruções para o Técnico *',
+                    hintText: 'Explique o que precisa ser refeito ou ajustado...',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
+              onPressed: enviando ? null : () async {
+                final motivo = motivoC.text.trim();
+                if (motivo.isEmpty) return;
+                setD(() => enviando = true);
+                try {
+                  if (numOS != null) {
+                    await supabase.from('ordens_servico').update({
+                      'status': 'Em Andamento',
+                      'prioridade': tipoEtiqueta,
+                      'observacao_tecnico': "[RETORNO $tipoEtiqueta]: $motivo",
+                      'visualizado_pelo_tecnico': false,
+                    }).ilike('numero_os', numOS);
+                  }
+                  if (servico['id'] != null) {
+                    await supabase.from('servicos').delete().eq('id', servico['id']);
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ O.S. devolvida ao técnico como $tipoEtiqueta!')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
+                } finally {
+                  if (ctx.mounted) setD(() => enviando = false);
+                }
+              },
+              child: const Text('Confirmar Devolução', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -756,13 +864,21 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                           child: Text(s['descricao'] ?? '', style: const TextStyle(fontSize: 12, color: corTextoClaro)),
                                         ),
                                         const Divider(height: 12),
-                                        Row(children: [
+                                                                                Row(children: [
                                           TextButton.icon(
                                             style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                                             icon: const Icon(Icons.edit_note, size: 16, color: Colors.amberAccent),
                                             label: const Text('Preços', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
                                             onPressed: () => _modalGerenciarItensDoServico(s),
                                           ),
+                                          if (!fat && s['descricao'] != null && (s['descricao'].toString().contains('[OS') || s['descricao'].toString().contains('[O.S'))) ...[
+                                            TextButton.icon(
+                                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                              icon: const Icon(Icons.replay, size: 14, color: Colors.orangeAccent),
+                                              label: const Text('Devolver O.S.', style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                                              onPressed: () => _modalDevolverOS(s),
+                                            ),
+                                          ],
                                           PopupMenuButton<String>(
                                             tooltip: 'Gerar PDF',
                                             icon: const Icon(Icons.picture_as_pdf, color: corCianoEletrico, size: 18),
