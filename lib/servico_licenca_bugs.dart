@@ -58,8 +58,23 @@ class ServicoLicencaBugs {
     };
   }
 
-  static Future<void> registrarErroOuBug({
+    static Future<void> registrarErroOuBug({
     required String erro,
+    String detalhes = '',
+    String tipo = 'MANUAL',
+    String? usuarioInformado,
+    String? empresaInformada,
+  }) async {
+    // 🛡️ Filtra e bloqueia avisos de Realtime de usuarios e conexao
+    final eLower = erro.toLowerCase();
+    if (eLower.contains('realtimesubscribe') ||
+        eLower.contains('channelerror') ||
+        eLower.contains('usuarios') ||
+        eLower.contains('socketexception') ||
+        eLower.contains('handshake') ||
+        eLower.contains('timed out')) {
+      return;
+    }required String erro,
     String detalhes = '',
     String tipo = 'MANUAL',
     String? usuarioInformado,

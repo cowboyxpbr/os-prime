@@ -181,7 +181,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
               Icon(Icons.replay_circle_filled, color: Colors.orangeAccent, size: 22),
               SizedBox(width: 8),
               Expanded(
-                child: Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corTextoClaro)),
+                child: Text('Voltar O.S. (Garantia/Retorno)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corTextoClaro)),
               ),
             ],
           ),

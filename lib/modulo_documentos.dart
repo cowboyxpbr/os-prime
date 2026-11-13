@@ -1262,53 +1262,80 @@ String? _numeroOSOrigem;
                           Text("📍 ${_clienteAtual!.enderecoCompleto}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                         ],
                         const Divider(height: 12),
-                        Row(
+                                                Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             if (isRecibo) ...[
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: corVerdeWhats,
-                                  foregroundColor: Colors.white,
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: corVerdeWhats, width: 1),
+                                  foregroundColor: corVerdeWhats,
                                   visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                 ),
-                                icon: const Icon(Icons.cloud_download, size: 14),
-                                label: const Text('Puxar Faturamento', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                icon: const Icon(Icons.cloud_download_rounded, size: 13),
+                                label: const Text('Faturamento', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                 onPressed: _modalPuxarDoFaturamento,
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                             ],
-                            if (!isRecibo) ...[
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.amber.shade700,
-                                  foregroundColor: Colors.black,
+                            if (isOrcamento) ...[
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Colors.amberAccent, width: 1),
+                                  foregroundColor: Colors.amberAccent,
                                   visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                 ),
-                                icon: const Icon(Icons.assignment_returned, size: 14),
-                                label: const Text('\u{1F4E5} Puxar da O.S.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                icon: const Icon(Icons.download_rounded, size: 13),
+                                label: const Text('Puxar O.S.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                                 onPressed: _modalPuxarDaOS,
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: corCianoSuave, width: 1),
+                                  foregroundColor: corCianoSuave,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                                icon: const Icon(Icons.history_rounded, size: 13),
+                                label: const Text('Histórico', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const TelaListaOrcamentosSalvos()),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 4),
                             ],
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: corCianoEletrico),
+                                side: const BorderSide(color: corCianoEletrico, width: 1),
                                 foregroundColor: corCianoEletrico,
                                 visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
-                              icon: const Icon(Icons.person_add_alt_1, size: 14),
-                              label: const Text('+ Novo', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.person_add_alt_1, size: 13),
+                              label: const Text('+ Novo', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                               onPressed: _modalNovoClienteRapido,
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 4),
                             OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-                              icon: const Icon(Icons.search, size: 14),
-                              label: Text(_clienteAtual == null ? 'Buscar' : 'Trocar', style: const TextStyle(fontSize: 11)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white24, width: 1),
+                                foregroundColor: corTextoClaro,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              icon: const Icon(Icons.search, size: 13),
+                              label: Text(_clienteAtual == null ? 'Buscar' : 'Trocar', style: const TextStyle(fontSize: 10)),
                               onPressed: _buscarClientes,
                             ),
                           ],
@@ -1360,30 +1387,7 @@ String? _numeroOSOrigem;
                   // ============================================================
                   // SEÇÃO DE EQUIPAMENTOS DO ORÇAMENTO (TIPO, MARCA, POTÊNCIA...)
                   // ============================================================
-                  if (isOrcamento) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.amberAccent, width: 1.5),
-                          foregroundColor: Colors.amberAccent,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: const Icon(Icons.folder_special_rounded, size: 16),
-                        label: const Text(
-                          'HISTÓRICO DE ORÇAMENTOS',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const TelaListaOrcamentosSalvos()),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                  
 
                                     // ============================================================
                   // 1. EQUIPAMENTOS EM AVALIAÇÃO (ORÇAMENTO)
@@ -1605,24 +1609,7 @@ String? _numeroOSOrigem;
                   // 6. BOTÕES DE AÇÃO (SALVAR, IMPRIMIR E WHATSAPP)
                   // ============================================================
                   const SizedBox(height: 16),
-                  if (isOrcamento) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 42,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1A365D),
-                          foregroundColor: corCianoEletrico,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          side: const BorderSide(color: corCianoEletrico),
-                        ),
-                        icon: const Icon(Icons.save_rounded, size: 18),
-                        label: const Text('SALVAR ORÇAMENTO NO HISTÓRICO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        onPressed: () => _salvarOrcamentoNaLista(mostrarFeedback: true),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                  
 
                   Row(
                     children: [

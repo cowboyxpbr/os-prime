@@ -236,8 +236,8 @@ class _PainelSuperAdminPageState extends State<PainelSuperAdminPage> {
         : (1000 + Random().nextInt(8999)).toString();
     final novaChave = 'PRIME-$plano-$sufixo';
 
-    // Prazo FIXO a partir de hoje (não acumula em cima de dias anteriores)
-    final novaValidade = DateTime.now().add(Duration(days: dias)).toUtc().toIso8601String();
+        // 🔒 CALCULA PRAZO EXATO A PARTIR DE HOJE (NUNCA ACUMULA DIAS ANTERIORES)
+    final novaValidade = DateTime.now().toUtc().add(Duration(days: dias)).toIso8601String();
 
     try {
       await supabase.from('empresas').update({
