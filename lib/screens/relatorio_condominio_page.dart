@@ -1,9 +1,9 @@
-﻿// ============================================================================
+// ============================================================================
 // RELATÓRIO / LAUDO DE CAMPO E BANCADA COM IMPRESSÃO DIRETA E EXPURGO 90 DIAS
 // lib/screens/relatorio_condominio_page.dart
 // ============================================================================
 
-import 'dart:io';
+import '../universal_io.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';

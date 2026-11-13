@@ -1,9 +1,14 @@
-name: Compilar APK O.S. Prime
+name: Compilar APKs e Publicar Web
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -25,16 +30,15 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 1. Gerar Pasta Android (estrutura limpa)
-        run: flutter create . --platforms=android --org com.osprime
+      - name: 1. Gerar Estrutura Limpa (Android + Web)
+        run: flutter create . --platforms=android,web --org com.osprime
 
-      - name: 2. Injetar google-services.json, Chave Fixa e Plugins
+      - name: 2. Injetar google-services.json e Chave Fixa
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
           CHAVE_FIXA: ${{ secrets.CHAVE_FIXA }}
         run: |
           echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
-
           mkdir -p ~/.android
           cp chave_assinatura.keystore ~/.android/debug.keystore
           cp chave_assinatura.keystore android/app/debug.keystore
@@ -56,19 +60,19 @@ jobs:
             echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
           fi
 
-      - name: 3. Instalar Dependências e Plugins
+      - name: 3. Instalar Dependências
         run: flutter pub get
 
-      - name: 4. Aplicar Ícone Oficial do App
+      - name: 4. Aplicar Ícones do App
         run: dart run flutter_launcher_icons
 
-      - name: 5. Compilar APK Comercial (Empresas Clientes)
+      - name: 5. Compilar APK Comercial (Empresas)
         run: |
           mkdir -p apks_prontos
           flutter build apk --release -t lib/main.dart --build-number=${{ github.run_number }}
           cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
-      - name: 6. Compilar APK Gerenciador (Exclusivo Dono / Super Admin)
+      - name: 6. Compilar APK Gerenciador (Dono)
         run: |
           sed -i 's/"package_name": *"[^"]*"/"package_name": "com.osprime.admin"/g' android/app/google-services.json
           if [ -f "android/app/build.gradle.kts" ]; then
@@ -80,14 +84,36 @@ jobs:
           flutter build apk --release -t lib/main_admin.dart --build-number=${{ github.run_number }}
           cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
 
-      - name: 7. Disponibilizar APK das Empresas para Download
+      - name: 7. Disponibilizar APK Comercial para Download
         uses: actions/upload-artifact@v4
         with:
           name: 1-APK-COMERCIAL-EMPRESAS-v${{ github.run_number }}
           path: apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
-      - name: 8. Disponibilizar APK Gerenciador do Dono para Download
+      - name: 8. Disponibilizar APK Gerenciador para Download
         uses: actions/upload-artifact@v4
         with:
           name: 2-APK-GERENCIADOR-DONO-v${{ github.run_number }}
           path: apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
+
+      - name: 9. Compilar Versão Web para Escritório
+        run: flutter build web --release --base-href "/os-prime/"
+
+      - name: 10. Enviar Arquivos Web para o GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy-web:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 11. Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'servico_push.dart';
 
 import 'app_base.dart';
 import 'screens/menu_principal_page.dart';
@@ -20,23 +20,14 @@ void main() async {
 
   // CONFIGURAÇÃO ONESIGNAL (COM SOM E PERMISSÃO ATIVA - ID CORRIGIDO COM 4708)
   try {
-    OneSignal.initialize("04552b74-f865-437f-94b6-4b07dc65d901");
-    await OneSignal.Notifications.requestPermission(true);
-    OneSignal.Notifications.addForegroundWillDisplayListener((event) {
-      event.notification.display();
-    });
-  } catch (_) {}
+    ServicoPushApp.inicializar();
 
   final usuario = await CacheOffline.obterSessaoAtiva();
 
   if (usuario != null) {
     try {
       final userLimpo = usuario.usuario.trim().toLowerCase().replaceAll('@', '');
-      await OneSignal.login(userLimpo);
-      OneSignal.User.addTagWithKey("usuario", userLimpo);
-      OneSignal.User.addTagWithKey("nome", usuario.nome.trim().toLowerCase());
-      OneSignal.User.addTagWithKey("cargo", usuario.cargo);
-    } catch (_) {}
+      await ServicoPushApp.login(userLimpo, usuario.nome.trim().toLowerCase(), usuario.cargo);
   }
 
   runApp(MaterialApp(
@@ -185,11 +176,7 @@ class _TelaLoginState extends State<TelaLogin> {
     if (autenticado != null) {
       try {
         final loginOneSignal = autenticado.usuario.trim().toLowerCase().replaceAll('@', '');
-        await OneSignal.login(loginOneSignal);
-        OneSignal.User.addTagWithKey("usuario", loginOneSignal);
-        OneSignal.User.addTagWithKey("nome", autenticado.nome.trim().toLowerCase());
-        OneSignal.User.addTagWithKey("cargo", autenticado.cargo);
-      } catch (_) {}
+        await ServicoPushApp.login(loginOneSignal, autenticado.nome.trim().toLowerCase(), autenticado.cargo);
 
       await CacheOffline.salvarSessao(autenticado, _manterLogado);
       if (mounted) {

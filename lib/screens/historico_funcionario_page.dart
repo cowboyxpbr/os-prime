@@ -3,7 +3,7 @@
 // lib/screens/historico_funcionario_page.dart (O.S. Prime)
 // ============================================================================
 
-import 'dart:io';
+import '../universal_io.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';

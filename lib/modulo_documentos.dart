@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
-import 'dart:io';
+import 'universal_io.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
