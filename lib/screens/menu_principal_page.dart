@@ -1,6 +1,6 @@
 // ============================================================================
 // ARQUIVO: MENU PRINCIPAL COM MARCA D'ÁGUA E BORDAS TRANSLÚCIDAS
-// lib/screens/menu_principal_page.dart (VERSÃO OFICIAL: O.S. Prime)
+// lib/screens/menu_principal_page.dart
 // ============================================================================
 
 import 'dart:async';
@@ -25,7 +25,6 @@ import 'dados_empresa_page.dart';
 import 'licenca_bloqueada_page.dart';
 import '../servico_licenca_bugs.dart';
 
-// HELPER: DISPARADOR DIRETO DO WHATSAPP
 Future<void> _abrirWhatsApp(String telefone, {String mensagem = ''}) async {
   final limpo = telefone.replaceAll(RegExp(r'[^\d]'), '');
   if (limpo.isEmpty) return;
@@ -40,9 +39,6 @@ Future<void> _abrirWhatsApp(String telefone, {String mensagem = ''}) async {
   } catch (_) {}
 }
 
-// ============================================================================
-// MENU PRINCIPAL
-// ============================================================================
 class TelaMenuPrincipal extends StatefulWidget {
   final UsuarioApp usuarioLogado;
   const TelaMenuPrincipal({super.key, required this.usuarioLogado});
@@ -62,8 +58,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
     _verificarLicenca();
   }
 
-  @override
-
   Future<void> _verificarLicenca() async {
     try {
       final res = await supabase.from('empresas').select().limit(1).maybeSingle();
@@ -75,7 +69,11 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
           validade = DateTime.tryParse(validadeStr);
         }
         final agora = DateTime.now();
-        final expirado = (validade != null && agora.isAfter(validade)) || status == 'bloqueado' || status == 'suspenso' || status == 'pendente' || status == 'aguardando_cadastro';
+        final expirado = (validade != null && agora.isAfter(validade)) ||
+            status == 'bloqueado' ||
+            status == 'suspenso' ||
+            status == 'pendente' ||
+            status == 'aguardando_cadastro';
 
         if (expirado && mounted) {
           Navigator.pushReplacement(
@@ -92,22 +90,17 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
     } catch (_) {}
   }
 
+  @override
   void dispose() {
     _vigilanteSessaoSub?.cancel();
     super.dispose();
   }
 
-  // ==========================================================================
-  // 🚨 VIGILANTE DE SESSÃO: EXPULSA NA HORA SE EXCLUÍDO OU SENHA MUDADA
-  // ==========================================================================
   void _iniciarVigilanteSessao() {
     if (widget.usuarioLogado.usuario.trim().toLowerCase() == 'admin') return;
 
     try {
-      _vigilanteSessaoSub = supabase
-          .from('usuarios')
-          .stream(primaryKey: ['id'])
-          .listen((lista) async {
+      _vigilanteSessaoSub = ServicoLicencaBugs.streamTabelaSegura('usuarios').listen((lista) async {
         if (lista.isEmpty) return;
 
         final meuLogin = widget.usuarioLogado.usuario.trim().toLowerCase();
@@ -222,8 +215,8 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: const [
+            const Row(
+              children: [
                 IconeWhatsAppOficial(size: 22),
                 SizedBox(width: 8),
                 Text(
@@ -542,16 +535,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                       final idBanco = checar.first['id'];
                       await supabase.from('usuarios').update(widget.usuarioLogado.toMap()).eq('id', idBanco);
                     } else {
-                      if (widget.usuarioLogado.isMaster) {
-                        final checarMaster = await supabase.from('usuarios').select('id').ilike('cargo', 'master');
-                        if (checarMaster.isNotEmpty) {
-                          await supabase.from('usuarios').update(widget.usuarioLogado.toMap()).eq('id', checarMaster.first['id']);
-                        } else {
-                          await supabase.from('usuarios').upsert(widget.usuarioLogado.toMap(), onConflict: 'usuario');
-                        }
-                      } else {
-                        await supabase.from('usuarios').upsert(widget.usuarioLogado.toMap(), onConflict: 'usuario');
-                      }
+                      await supabase.from('usuarios').upsert(widget.usuarioLogado.toMap(), onConflict: 'usuario');
                     }
 
                     if (antigoUser != novoUser && antigoUser.isNotEmpty) {
@@ -767,9 +751,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
 
     return Scaffold(
       backgroundColor: corFundoApp,
-      // ======================================================================
-      // 💬 BOTÃO DO CHAT EM CÁPSULA MODERNA COM O TEXTO "CHAT"
-      // ======================================================================
       floatingActionButton: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase
             .from('mensagens_chat')
@@ -841,7 +822,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                   ),
                 ),
               ),
-
               if (naoLidas > 0)
                 Positioned(
                   top: -5,
@@ -875,7 +855,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
       ),
       body: Column(
         children: [
-          // 1. CABEÇALHO COM BANNER 100% LARGURA
           BannerOSPrime(
             subtituloTela: isMaster
                 ? "Painel Master - Direção Geral"
@@ -884,31 +863,31 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (isMaster)
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const DadosEmpresaPage()),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: corCianoEletrico.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: corCianoEletrico.withOpacity(0.7), width: 1),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.business, color: corCianoEletrico, size: 13),
-                        SizedBox(width: 4),
-                        Text('Empresa', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
-                      ],
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DadosEmpresaPage()),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: corCianoEletrico.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: corCianoEletrico.withOpacity(0.7), width: 1),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.business, color: corCianoEletrico, size: 13),
+                          SizedBox(width: 4),
+                          Text('Empresa', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(width: 6),
                 InkWell(
                   onTap: _sair,
@@ -933,8 +912,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
               ],
             ),
           ),
-
-          // 2. CORPO COM A MARCA D'ÁGUA E BORDAS TRANSLÚCIDAS
           Expanded(
             child: Stack(
               children: [
@@ -948,7 +925,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                     ),
                   ),
                 ),
-
                 Column(
                   children: [
                     MonitorLicencaMasterWidget(usuarioLogado: widget.usuarioLogado),
@@ -1001,7 +977,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             ),
                           ),
                           const SizedBox(width: 10),
-
                           Expanded(
                             child: InkWell(
                               onTap: _abrirPerfilComValidacaoSenha,
@@ -1027,8 +1002,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                               ),
                             ),
                           ),
-
-                          // BOTÃO COM O ÍCONE DO WHATSAPP OFICIAL
                           IconButton(
                             iconSize: 26,
                             padding: const EdgeInsets.all(6),
@@ -1038,8 +1011,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             onPressed: _modalWhatsAppEquipe,
                           ),
                           const SizedBox(width: 4),
-
-                          // BOTÃO DE SINCRONIZAR
                           IconButton(
                             iconSize: 26,
                             padding: const EdgeInsets.all(6),
@@ -1048,17 +1019,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             tooltip: 'Sincronizar Dados',
                             onPressed: _sincronizar,
                           ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            iconSize: 24,
-                            padding: const EdgeInsets.all(6),
-                            constraints: const BoxConstraints(),
-                            icon: const Icon(Icons.bug_report_outlined, color: Colors.orangeAccent),
-                            tooltip: 'Relatar Erro / Bug',
-                            onPressed: () => ServicoLicencaBugs.abrirModalReportarBug(context, widget.usuarioLogado),
-                          ),
-
-                          // BOTÃO DE GESTÃO DE EQUIPE E SENHAS (MANTIDO AQUI AO LADO DO SINCRONIZAR)
                           if (isMaster) ...[
                             const SizedBox(width: 4),
                             IconButton(
@@ -1073,7 +1033,6 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                         ],
                       ),
                     ),
-
                     if (_pendentesOffline > 0)
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -1099,8 +1058,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                           ),
                         ]),
                       ),
-
-                                        Expanded(
+                    Expanded(
                       child: ListView(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         children: [
@@ -1155,27 +1113,8 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                             ),
                           ] else ...[
                             _tituloSecao("OPERAÇÃO & FATURAMENTO"),
-
-                            // 2 CURTOS: LANÇAR + FATURAR
                             Row(
                               children: [
-                                Expanded(
-                                  child: _cardCompacto(
-                                    "Lançar",
-                                    "Trabalho pronto",
-                                    Icons.add_shopping_cart_rounded,
-                                    corVerdeWhats,
-                                    () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => TelaPrecificacaoOS(
-                                          usuarioLogado: widget.usuarioLogado,
-                                        ),
-                                      ),
-                                    ).then((_) => _sincronizar()),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
                                 Expanded(
                                   child: _cardCompacto(
                                     "Faturar",
@@ -1184,32 +1123,11 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     corCianoEletrico,
                                     () => Navigator.push(
                                       context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const TelaFaturamento(),
-                                      ),
+                                      MaterialPageRoute(builder: (_) => const TelaFaturamento()),
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-
-                            // 1 LONGO: ORDENS DE SERVIÇO (O.S.)
-                            _cardHorizontal(
-                              "Ordens de Serviço (O.S.)",
-                              "Criar, despachar e acompanhar atendimentos",
-                              Icons.assignment_rounded,
-                              corAmareloSuave,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const TelaOSAdmin()),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            // 2 CURTOS: MINHAS O.S. + TRABALHO SEM O.S
-                            Row(
-                              children: [
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: _cardCompacto(
                                     "Minhas O.S.",
@@ -1224,7 +1142,22 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _cardHorizontal(
+                              "Ordens de Serviço (O.S.)",
+                              "Criar, despachar e acompanhar atendimentos",
+                              Icons.assignment_rounded,
+                              corAmareloSuave,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const TelaOSAdmin()),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: _cardCompacto(
                                     "Trabalho sem O.S",
@@ -1242,29 +1175,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                              ],
-                            ),
-
-                            _tituloSecao("DOCUMENTOS & LAUDOS TÉCNICOS"),
-
-                            // 1 LONGO: RELATÓRIOS DE CONDOMÍNIO
-                            _cardHorizontal(
-                              "Relatórios de Condomínio",
-                              "Laudos periciais com equipamentos, até 10 fotos e WhatsApp",
-                              Icons.apartment_rounded,
-                              corCianoEletrico,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TelaRelatoriosCondominio(usuarioLogado: widget.usuarioLogado),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            // 2 CURTOS: ORÇAMENTO (SEM SUBTEXTO) + RECIBO
-                            Row(
-                              children: [
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: _cardCompacto(
                                     "Orçamento",
@@ -1273,13 +1184,26 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     corAmareloSuave,
                                     () => Navigator.push(
                                       context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const TelaEmissaoDoc(tipoDoc: 'ORÇAMENTO'),
-                                      ),
+                                      MaterialPageRoute(builder: (_) => const TelaEmissaoDoc(tipoDoc: 'ORÇAMENTO')),
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                              ],
+                            ),
+                            _tituloSecao("DOCUMENTOS & LAUDOS TÉCNICOS"),
+                            _cardHorizontal(
+                              "Relatórios de Condomínio",
+                              "Laudos periciais com equipamentos, até 10 fotos e WhatsApp",
+                              Icons.apartment_rounded,
+                              corCianoEletrico,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => TelaRelatoriosCondominio(usuarioLogado: widget.usuarioLogado)),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: _cardCompacto(
                                     "Recibo",
@@ -1288,35 +1212,11 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     corCianoEletrico,
                                     () => Navigator.push(
                                       context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const TelaEmissaoDoc(tipoDoc: 'RECIBO'),
-                                      ),
+                                      MaterialPageRoute(builder: (_) => const TelaEmissaoDoc(tipoDoc: 'RECIBO')),
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
-                              ],
-                            ),
-
-                            _tituloSecao("CADASTROS & NOTAS"),
-
-                            // 1 LONGO: MEU HISTÓRICO E RELATÓRIO
-                            _cardHorizontal(
-                              "Meu Histórico e Relatório",
-                              "Prestação de contas e histórico de produção",
-                              Icons.history_edu_rounded,
-                              corAmareloSuave,
-                              () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => TelaHistoricoFuncionario(usuarioLogado: widget.usuarioLogado),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            // 2 CURTOS: CLIENTES + DIÁRIO / NOTAS
-                            Row(
-                              children: [
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: _cardCompacto(
                                     "Clientes",
@@ -1329,7 +1229,22 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                              ],
+                            ),
+                            _tituloSecao("CADASTROS & CONTROLE"),
+                            _cardHorizontal(
+                              "Meu Histórico e Relatório",
+                              "Prestação de contas e histórico de produção",
+                              Icons.history_edu_rounded,
+                              corAmareloSuave,
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => TelaHistoricoFuncionario(usuarioLogado: widget.usuarioLogado)),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: _cardCompacto(
                                     "Diário / Notas",
@@ -1339,6 +1254,19 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     () => Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (_) => const TelaNotas()),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _cardCompacto(
+                                    "Bate-Papo",
+                                    "Equipe",
+                                    Icons.chat_rounded,
+                                    corCianoSuave,
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => TelaChat(usuarioLogado: widget.usuarioLogado)),
                                     ),
                                   ),
                                 ),
@@ -1396,7 +1324,8 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
             ),
             const SizedBox(height: 6),
             Text(tit, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: corTextoClaro)),
-            if (sub.trim().isNotEmpty) Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
+            if (sub.trim().isNotEmpty)
+              Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade400, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -1452,6 +1381,3 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
     );
   }
 }
-
-
-
