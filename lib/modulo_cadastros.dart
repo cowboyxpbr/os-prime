@@ -592,6 +592,13 @@ class _TelaDetalheNotaState extends State<TelaDetalheNota> {
 
     lista.removeWhere((n) => n.id == idNota);
     lista.insert(0, NotaApp(id: idNota, titulo: t.isEmpty ? 'Lembrete / Evento' : t, conteudo: c, dataHora: dataHoraFinal));
+    if (_alarmeSelecionado != null) {
+      ServicoNotificacaoOneSignal.agendarAlarmeNotaPush(
+        tituloNota: t.isEmpty ? 'Lembrete / Evento' : t,
+        conteudoNota: c,
+        dataAlarmeLocal: _alarmeSelecionado!,
+      );
+    }
 
     await CacheOffline.salvarNotasLocal(lista, usuarioKey: widget.usuarioKey);
     if (_alarmeSelecionado != null) {
