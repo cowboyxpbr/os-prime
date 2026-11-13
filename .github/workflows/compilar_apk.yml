@@ -1,4 +1,4 @@
-name: Compilar APKs e Painel Web
+name: Compilar APK Comercial e Web
 
 on:
   workflow_dispatch:
@@ -31,7 +31,6 @@ jobs:
       - name: 2. Injetar google-services.json e Chave Fixa
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-          CHAVE_FIXA: ${{ secrets.CHAVE_FIXA }}
         run: |
           echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
           mkdir -p ~/.android
@@ -61,41 +60,23 @@ jobs:
       - name: 4. Aplicar Ícones do App
         run: dart run flutter_launcher_icons
 
-      - name: 5. Compilar APK Comercial (Empresas)
+      - name: 5. Compilar APK Comercial (Empresas Clientes)
         run: |
           mkdir -p apks_prontos
           flutter build apk --release -t lib/main.dart --build-number=${{ github.run_number }}
           cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
-      - name: 6. Compilar APK Gerenciador (Dono)
-        run: |
-          sed -i 's/"package_name": *"[^"]*"/"package_name": "com.osprime.admin"/g' android/app/google-services.json
-          if [ -f "android/app/build.gradle.kts" ]; then
-            sed -i 's/applicationId *= *"[^"]*"/applicationId = "com.osprime.admin"/g' android/app/build.gradle.kts
-          elif [ -f "android/app/build.gradle" ]; then
-            sed -i 's/applicationId *"[^"]*"/applicationId "com.osprime.admin"/g' android/app/build.gradle
-          fi
-          sed -i 's/android:label="[^"]*"/android:label="O.S. Prime Admin"/g' android/app/src/main/AndroidManifest.xml
-          flutter build apk --release -t lib/main_admin.dart --build-number=${{ github.run_number }}
-          cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
-
-      - name: 7. Compilar Versão Web para Escritório
+      - name: 6. Compilar Versão Web para Escritório
         run: flutter build web --release
 
-      - name: 8. Disponibilizar APK Comercial para Download
+      - name: 7. Disponibilizar APK Comercial para Download
         uses: actions/upload-artifact@v4
         with:
           name: 1-APK-COMERCIAL-EMPRESAS-v${{ github.run_number }}
           path: apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
-      - name: 9. Disponibilizar APK Gerenciador para Download
+      - name: 8. Disponibilizar Painel Web para Escritório
         uses: actions/upload-artifact@v4
         with:
-          name: 2-APK-GERENCIADOR-DONO-v${{ github.run_number }}
-          path: apks_prontos/OS-Prime-Gerenciador-Admin-v${{ github.run_number }}.apk
-
-      - name: 10. Disponibilizar Painel Web para Escritório
-        uses: actions/upload-artifact@v4
-        with:
-          name: 3-PAINEL-WEB-ESCRITORIO-v${{ github.run_number }}
+          name: 2-PAINEL-WEB-ESCRITORIO-v${{ github.run_number }}
           path: build/web

@@ -8,16 +8,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar código
+      - name: Baixar o código do repositório
         uses: actions/checkout@v4
 
-      - name: Configurar Java
+      - name: Configurar o Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Configurar Flutter
+      - name: Configurar o Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -26,7 +26,7 @@ jobs:
       - name: 1. Gerar Estrutura Android
         run: flutter create . --platforms=android --org com.osprime
 
-      - name: 2. Injetar Chave Fixa Permanente e Pacote Admin
+      - name: 2. Injetar Chave Fixa e Pacote Exclusivo Admin
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
@@ -35,7 +35,6 @@ jobs:
           cp chave_assinatura.keystore ~/.android/debug.keystore
           cp chave_assinatura.keystore android/app/debug.keystore
 
-          # Força assinatura com a chave fixa e define pacote exclusivo com.osprime.admin
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i '/signingConfigs {/a \        getByName("debug") { storeFile = file("debug.keystore") }' android/app/build.gradle.kts
             sed -i 's/applicationId *= *"[^"]*"/applicationId = "com.osprime.admin"/g' android/app/build.gradle.kts
