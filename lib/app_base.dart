@@ -759,7 +759,9 @@ class ServicoNotificacaoOneSignal {
 // ============================================================================
 // WIDGETS VISUAIS GLOBAIS: BANNER COMPLETO 100% LARGURA COM cabecalho.png
 // ============================================================================
-typedef BannerOSPrime = BannerEletroHeinzen;
+
+
+
 
 typedef BannerOSPrime = BannerEletroHeinzen;
 
