@@ -101,6 +101,9 @@ class ServicoOrcamentosSalvos {
 // ============================================================================
 // 2. TELA DE HISTÓRICO DE ORÇAMENTOS SALVOS
 // ============================================================================
+// ============================================================================
+// 2. TELA DE HISTÓRICO COM ABAS "EM ABERTO" E "ORÇ. APROVADOS" (SEM FATURAMENTO)
+// ============================================================================
 class TelaListaOrcamentosSalvos extends StatefulWidget {
   const TelaListaOrcamentosSalvos({super.key});
 
@@ -110,6 +113,8 @@ class TelaListaOrcamentosSalvos extends StatefulWidget {
 
 class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   List<Map<String, dynamic>> _lista = [];
+  List<String> _tecnicosDisponiveis = [];
+  String _abaOrcamentos = 'Aberto'; // 'Aberto' ou 'Aprovado'
   String _filtro = '';
   bool _carregando = true;
 
@@ -117,6 +122,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   void initState() {
     super.initState();
     _iniciar();
+    _carregarTecnicos();
   }
 
   Future<void> _iniciar() async {
@@ -130,48 +136,216 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     }
   }
 
-  void _aprovarEEnviarParaPendentes(Map<String, dynamic> orc) async {
-    final String cliente = orc['cliente_nome'] ?? 'Cliente';
-    final double total = (orc['valor_total'] is num) ? (orc['valor_total'] as num).toDouble() : 0.0;
-    final String descricao = orc['descricao_itens'] ?? '';
-
-    final dadosFaturamento = {
-      'cliente': cliente,
-      'telefone': orc['cliente_telefone'] ?? '',
-      'cpf_cnpj': orc['cliente_documento'] ?? '',
-      'endereco': orc['cliente_endereco'] ?? '',
-      'titulo_destaque': orc['titulo_destaque'] ?? 'ORÇAMENTO APROVADO',
-      'descricao': descricao,
-      'quantidade': 1,
-      'valor_unitario': total,
-      'status': 'Pendente',
-      'tecnico': 'Escritório',
-      'data': orc['data'] ?? DateFormat('dd/MM/yyyy').format(DateTime.now()),
-    };
-
+  Future<void> _carregarTecnicos() async {
     try {
-      await supabase.from('servicos').insert(dadosFaturamento).timeout(const Duration(seconds: 8));
-      orc['status'] = 'Aprovado';
-      await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
-      _iniciar();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: corVerdeWhats, content: Text('🚀 Orçamento APROVADO e enviado para Serviços Pendentes no Faturamento!')),
-        );
+      final res = await supabase.from('usuarios').select('nome, cargo, usuario').order('nome');
+      final lista = (res as List)
+          .where((u) => (u['cargo'] ?? '').toString().toLowerCase() != 'master' && (u['usuario'] ?? '').toString().toLowerCase() != 'admin')
+          .map((u) => (u['nome'] ?? u['usuario'] ?? '').toString().trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+      if (lista.isNotEmpty) {
+        _tecnicosDisponiveis = lista;
+      } else {
+        _tecnicosDisponiveis = (res as List).map((u) => (u['nome'] ?? '').toString().trim()).where((n) => n.isNotEmpty).toList();
       }
-    } catch (e) {
-      await CacheOffline.salvarServicoFilaOffline(dadosFaturamento);
-      orc['status'] = 'Aprovado';
-      await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
-      _iniciar();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Salvo offline: Enviado para a fila de faturamento!')),
-        );
-      }
+    } catch (_) {
+      final locais = await CacheOffline.carregarUsuariosLocais();
+      _tecnicosDisponiveis = locais.map((u) => u.nome).toList();
     }
+    if (_tecnicosDisponiveis.isEmpty) _tecnicosDisponiveis = ['Técnico Responsável'];
+  }
+
+  // 1. APROVAÇÃO DIRETA (SEM DESPACHAR PARA FATURAMENTO)
+  Future<void> _aprovarOrcamentoSemFaturamento(Map<String, dynamic> orc) async {
+    orc['status'] = 'Aprovado';
+    await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
+    await _iniciar();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: corVerdeWhats,
+          content: Text('✅ Orçamento marcado como APROVADO! Agora disponível na aba "Orç. Aprovados".'),
+        ),
+      );
+    }
+  }
+
+  // 2. ENCAMINHAR ORÇAMENTO APROVADO COMO ORDEM DE SERVIÇO (O.S.)
+  void _modalEncaminharComoOS(Map<String, dynamic> orc) async {
+    String? tecnicoSel = _tecnicosDisponiveis.isNotEmpty ? _tecnicosDisponiveis.first : 'Técnico';
+    String prioridadeSel = 'Normal';
+    DateTime dataExecucao = DateTime.now();
+    TimeOfDay horaExecucao = const TimeOfDay(hour: 8, minute: 0);
+    bool gerandoOS = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final dataHoraFmt = "${DateFormat('dd/MM/yyyy').format(dataExecucao)} às ${horaExecucao.format(ctx)}";
+
+          return AlertDialog(
+            backgroundColor: corCardFundo,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Colors.amberAccent, width: 1.5),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.assignment_turned_in_rounded, color: Colors.amberAccent, size: 22),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Encaminhar como O.S.', style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Cliente: ${orc['cliente_nome'] ?? 'Cliente'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: corTextoClaro)),
+                  if (orc['cliente_endereco'] != null && orc['cliente_endereco'].toString().isNotEmpty)
+                    Text("📍 ${orc['cliente_endereco']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  const Text('1. SELECIONE O PRESTADOR / TÉCNICO:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: tecnicoSel,
+                    dropdownColor: corCardFundo,
+                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                    items: _tecnicosDisponiveis.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12.5)))).toList(),
+                    onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('2. DATA E HORA DE EXECUÇÃO:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () async {
+                      final pData = await showDatePicker(
+                        context: context,
+                        initialDate: dataExecucao,
+                        firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime(2035),
+                        builder: (c, w) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: corCianoEletrico, onPrimary: Colors.black, surface: corCardFundo)), child: w!),
+                      );
+                      if (pData != null && ctx.mounted) {
+                        final pHora = await showTimePicker(
+                          context: context,
+                          initialTime: horaExecucao,
+                          builder: (c, w) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: corCianoEletrico, onPrimary: Colors.black, surface: corCardFundo)), child: w!),
+                        );
+                        if (pHora != null) {
+                          setD(() {
+                            dataExecucao = pData;
+                            horaExecucao = pHora;
+                          });
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF142030),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month, color: Colors.amberAccent, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(dataHoraFmt, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                          const Text('Alterar', style: TextStyle(color: corCianoSuave, fontSize: 10.5)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('3. PRIORIDADE DA O.S.:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: prioridadeSel,
+                    dropdownColor: corCardFundo,
+                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                    items: const [
+                      DropdownMenuItem(value: 'Normal', child: Text('Normal (Padrão)')),
+                      DropdownMenuItem(value: 'Urgente', child: Text('Urgente', style: TextStyle(color: Colors.orangeAccent))),
+                      DropdownMenuItem(value: 'Emergência', child: Text('Emergência Imediata', style: TextStyle(color: Colors.redAccent))),
+                      DropdownMenuItem(value: 'Plantão', child: Text('🚨 Plantão Especial', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
+                    ],
+                    onChanged: (v) => setD(() => prioridadeSel = v ?? 'Normal'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: corVerdeWhats, foregroundColor: Colors.white),
+                icon: gerandoOS
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.send_rounded, size: 16),
+                label: const Text('Gerar e Despachar O.S.', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: gerandoOS
+                    ? null
+                    : () async {
+                        setD(() => gerandoOS = true);
+                        final numOS = "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}";
+                        final descOS = "[ORÇAMENTO APROVADO] ${orc['descricao_itens'] ?? ''}\n${orc['laudo_descritivo'] ?? ''}".trim();
+
+                        final novaOS = {
+                          'numero_os': numOS,
+                          'cliente': orc['cliente_nome'] ?? 'Cliente',
+                          'telefone': orc['cliente_telefone'] ?? '',
+                          'endereco': orc['cliente_endereco'] ?? '',
+                          'descricao_problema': descOS,
+                          'tecnico_designado': tecnicoSel,
+                          'prioridade': prioridadeSel,
+                          'status': 'Pendente',
+                          'data_abertura': "${DateFormat('dd/MM/yyyy').format(dataExecucao)} • ${horaExecucao.format(ctx)}",
+                          'visualizado_pelo_tecnico': false,
+                          'equipamentos': jsonEncode(orc['equipamentos'] ?? []),
+                        };
+
+                        try {
+                          await supabase.from('ordens_servico').insert(novaOS);
+                          ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                            tecnicoLogin: tecnicoSel!,
+                            numeroOS: numOS,
+                            cliente: orc['cliente_nome'] ?? 'Cliente',
+                            categoria: prioridadeSel,
+                          );
+
+                          orc['status'] = "Aprovado - O.S. $numOS";
+                          await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
+                          await _iniciar();
+
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.green,
+                                content: Text('🚀 $numOS gerada e despachada para $tecnicoSel com sucesso!'),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao gerar O.S.: $e')));
+                        } finally {
+                          if (ctx.mounted) setD(() => gerandoOS = false);
+                        }
+                      },
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _confirmarExcluir(String id) {
@@ -206,7 +380,13 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   @override
   Widget build(BuildContext context) {
     final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-    final filtrados = _lista.where((o) {
+
+    final abertos = _lista.where((o) => (o['status'] ?? '') != 'Aprovado' && !(o['status'] ?? '').toString().startsWith('Aprovado')).toList();
+    final aprovados = _lista.where((o) => (o['status'] ?? '') == 'Aprovado' || (o['status'] ?? '').toString().startsWith('Aprovado')).toList();
+
+    final listaAtiva = _abaOrcamentos == 'Aberto' ? abertos : aprovados;
+
+    final filtrados = listaAtiva.where((o) {
       if (_filtro.isEmpty) return true;
       final f = _filtro.toLowerCase();
       final c = (o['cliente_nome'] ?? '').toString().toLowerCase();
@@ -217,9 +397,68 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     return Scaffold(
       body: Column(
         children: [
-          const BannerOSPrime(subtituloTela: 'Histórico de Orçamentos', exibirBotaoVoltar: true),
+          const BannerOSPrime(subtituloTela: 'Orçamentos', exibirBotaoVoltar: true),
+
+          // SELETOR DAS 2 ABAS: EM ABERTO E ORÇ. APROVADOS
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _abaOrcamentos = 'Aberto'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _abaOrcamentos == 'Aberto' ? Colors.amberAccent.withOpacity(0.2) : corCardFundo,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _abaOrcamentos == 'Aberto' ? Colors.amberAccent : Colors.white12, width: 1.2),
+                      ),
+                      child: Center(
+                        child: Text(
+                          "🟡 Aguardando (${abertos.length})",
+                          style: TextStyle(
+                            color: _abaOrcamentos == 'Aberto' ? Colors.amberAccent : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _abaOrcamentos = 'Aprovado'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _abaOrcamentos == 'Aprovado' ? corVerdeWhats.withOpacity(0.2) : corCardFundo,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _abaOrcamentos == 'Aprovado' ? corVerdeWhats : Colors.white12, width: 1.2),
+                      ),
+                      child: Center(
+                        child: Text(
+                          "🟢 Orç. Aprovados (${aprovados.length})",
+                          style: TextStyle(
+                            color: _abaOrcamentos == 'Aprovado' ? corVerdeWhats : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: TextField(
               decoration: const InputDecoration(
                 hintText: 'Filtrar por cliente ou peça...',
@@ -229,17 +468,20 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
               onChanged: (v) => setState(() => _filtro = v),
             ),
           ),
+
           Expanded(
             child: _carregando
                 ? const Center(child: CircularProgressIndicator(color: corCianoEletrico))
                 : filtrados.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Padding(
-                          padding: EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(24),
                           child: Text(
-                            'Nenhum orçamento salvo no histórico.\n(Orçamentos expiram após 90 dias para economia de memória).',
+                            _abaOrcamentos == 'Aberto'
+                                ? 'Nenhum orçamento aguardando aprovação.'
+                                : 'Nenhum orçamento aprovado no momento.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey, fontSize: 13),
+                            style: const TextStyle(color: Colors.grey, fontSize: 13),
                           ),
                         ),
                       )
@@ -249,13 +491,14 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         itemBuilder: (_, i) {
                           final orc = filtrados[i];
                           final double total = (orc['valor_total'] is num) ? (orc['valor_total'] as num).toDouble() : 0.0;
-                          final bool aprovado = orc['status'] == 'Aprovado';
+                          final status = (orc['status'] ?? 'Pendente').toString();
+                          final bool isAprovado = status.startsWith('Aprovado');
 
                           return Card(
                             margin: const EdgeInsets.only(bottom: 10),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: aprovado ? corVerdeWhats.withAlpha(90) : corCianoEletrico.withAlpha(70)),
+                              side: BorderSide(color: isAprovado ? corVerdeWhats.withAlpha(90) : Colors.amberAccent.withAlpha(80)),
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(12),
@@ -268,12 +511,16 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: aprovado ? const Color(0x2625D366) : const Color(0x2600D4FF),
+                                          color: isAprovado ? const Color(0x2625D366) : const Color(0x26FFC107),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Text(
-                                          aprovado ? '🟢 APROVADO' : '🟡 AGUARDANDO CLIENTE',
-                                          style: TextStyle(color: aprovado ? corVerdeWhats : corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                          isAprovado ? "🟢 $status".toUpperCase() : '🟡 AGUARDANDO CLIENTE',
+                                          style: TextStyle(
+                                            color: isAprovado ? corVerdeWhats : Colors.amberAccent,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                       Text(orc['data'] ?? '', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
@@ -300,6 +547,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                                   ),
                                   const Divider(height: 14),
 
+                                  // BOTÕES DE AÇÃO CONFORME A ABA
                                   Row(
                                     children: [
                                       OutlinedButton.icon(
@@ -324,7 +572,9 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                                         },
                                       ),
                                       const Spacer(),
-                                      if (!aprovado)
+
+                                      // ABA 1 (EM ABERTO): BOTÃO APROVAR (SEM FATURAMENTO)
+                                      if (!isAprovado)
                                         ElevatedButton.icon(
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: corVerdeWhats,
@@ -334,8 +584,23 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                                           ),
                                           icon: const Icon(Icons.check_circle_outline, size: 15),
                                           label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                          onPressed: () => _aprovarEEnviarParaPendentes(orc),
+                                          onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                                         ),
+
+                                      // ABA 2 (ORÇ. APROVADOS): BOTÃO ENCAMINHAR COMO O.S.
+                                      if (isAprovado)
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.amberAccent,
+                                            foregroundColor: Colors.black,
+                                            visualDensity: VisualDensity.compact,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          ),
+                                          icon: const Icon(Icons.assignment_ind_rounded, size: 15),
+                                          label: const Text('Encaminhar O.S.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                          onPressed: () => _modalEncaminharComoOS(orc),
+                                        ),
+
                                       const SizedBox(width: 4),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
@@ -358,9 +623,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   }
 }
 
-// ============================================================================
-// 3. TELA DE EMISSÃO: DATA FLEXÍVEL, EQUIPAMENTOS TÉCNICOS E AÇÕES RÁPIDAS
-// ============================================================================
 class TelaEmissaoDoc extends StatefulWidget {
   final String tipoDoc;
   final DadosCliente? clienteInicial;
@@ -1041,6 +1303,54 @@ String? _numeroOSOrigem;
     }
   }
 
+    void _modalEditarLegendaEAvariaFoto(int index) {
+    final legCtrl = TextEditingController(text: _fotos[index].legenda);
+    final avariaCtrl = TextEditingController(text: _fotos[index].avaria);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: corCardFundo,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
+        title: Text('📸 Detalhes da Foto #${index + 1}', style: const TextStyle(color: corCianoEletrico, fontSize: 15, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Foto travada em 4x4 cm no laudo PDF.', style: TextStyle(color: Colors.grey, fontSize: 11)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: legCtrl,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Legenda da Foto *', hintText: 'Ex: Vista superior do motor', isDense: true),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: avariaCtrl,
+              textCapitalization: TextCapitalization.sentences,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Identificação de Avaria / Defeito', hintText: 'Descreva a trinca, oxidação ou defeito encontrado...', alignLabelWithHint: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
+            child: const Text('Salvar'),
+            onPressed: () {
+              setState(() {
+                _fotos[index].legenda = legCtrl.text.trim();
+                _fotos[index].avaria = avariaCtrl.text.trim();
+              });
+              Navigator.pop(ctx);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _modalEscolherOrigemFoto() {
     showModalBottomSheet(
       context: context,
@@ -1561,16 +1871,28 @@ String? _numeroOSOrigem;
                         scrollDirection: Axis.horizontal,
                         itemCount: _fotos.length,
                         itemBuilder: (ctx, i) {
-                          return Stack(
+                                                    return Stack(
                             children: [
-                              Container(
-                                margin: const EdgeInsets.only(right: 8),
-                                width: 85,
-                                height: 85,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.white24),
-                                  image: DecorationImage(image: obterImagemProvider(_fotos[i].caminhoArquivo), fit: BoxFit.cover),
+                              InkWell(
+                                onTap: () => _modalEditarLegendaEAvariaFoto(i),
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  width: 85,
+                                  height: 85,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: _fotos[i].avaria.isNotEmpty ? Colors.orangeAccent : corCianoEletrico, width: 1.5),
+                                    image: DecorationImage(image: obterImagemProvider(_fotos[i].caminhoArquivo), fit: BoxFit.cover),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 2,
+                                left: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                                  child: const Text('✏️ 4x4', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                                 ),
                               ),
                               Positioned(

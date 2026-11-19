@@ -240,140 +240,26 @@ class EquipamentoRelatorio {
 class FotoRelatorio {
   String caminhoArquivo;
   String legenda;
+  String avaria;
 
-  FotoRelatorio({required this.caminhoArquivo, required this.legenda});
+  FotoRelatorio({
+    required this.caminhoArquivo,
+    required this.legenda,
+    this.avaria = '',
+  });
 
   Map<String, dynamic> toMap() => {
     'caminhoArquivo': caminhoArquivo,
     'legenda': legenda,
+    'avaria': avaria,
   };
 
   factory FotoRelatorio.fromMap(Map<String, dynamic> m) => FotoRelatorio(
     caminhoArquivo: m['caminhoArquivo'] ?? '',
     legenda: m['legenda'] ?? '',
+    avaria: m['avaria'] ?? '',
   );
 }
-
-class RelatorioCondominioModel {
-  String? id;
-  String nomeCondominio;
-  String sindicoResponsavel;
-  String telefone;
-  String cnpjCpf;
-  String enderecoCompleto;
-  String tipoDocumento;
-  String tituloLaudo;
-  String dataEmissao;
-  String tecnico;
-  List<EquipamentoRelatorio> equipamentos;
-  String diagnosticoTecnico;
-  String recomendacoesServicos;
-  List<FotoRelatorio> fotos;
-
-  RelatorioCondominioModel({
-    this.id,
-    required this.nomeCondominio,
-    required this.sindicoResponsavel,
-    required this.telefone,
-    this.cnpjCpf = '',
-    required this.enderecoCompleto,
-    required this.tipoDocumento,
-    required this.tituloLaudo,
-    required this.dataEmissao,
-    String? tecnico,
-    String? tecnicoResponsavel,
-    required this.equipamentos,
-    required this.diagnosticoTecnico,
-    required this.recomendacoesServicos,
-    required this.fotos,
-  }) : tecnico = tecnico ?? tecnicoResponsavel ?? '';
-
-  String get tecnicoResponsavel => tecnico;
-  set tecnicoResponsavel(String v) => tecnico = v;
-
-  Map<String, dynamic> toMap() => {
-    if (id != null) 'id': id,
-    'nomeCondominio': nomeCondominio,
-    'sindicoResponsavel': sindicoResponsavel,
-    'telefone': telefone,
-    'cnpjCpf': cnpjCpf,
-    'enderecoCompleto': enderecoCompleto,
-    'tipoDocumento': tipoDocumento,
-    'tituloLaudo': tituloLaudo,
-    'dataEmissao': dataEmissao,
-    'tecnico': tecnico,
-    'equipamentos': equipamentos.map((e) => e.toMap()).toList(),
-    'diagnosticoTecnico': diagnosticoTecnico,
-    'recomendacoesServicos': recomendacoesServicos,
-    'fotos': fotos.map((f) => f.toMap()).toList(),
-  };
-
-  factory RelatorioCondominioModel.fromMap(Map<String, dynamic> m) => RelatorioCondominioModel(
-    id: m['id']?.toString(),
-    nomeCondominio: m['nomeCondominio'] ?? '',
-    sindicoResponsavel: m['sindicoResponsavel'] ?? '',
-    telefone: m['telefone'] ?? '',
-    cnpjCpf: (m['cnpjCpf'] ?? m['cnpj'] ?? m['cpf_cnpj'] ?? '').toString(),
-    enderecoCompleto: m['enderecoCompleto'] ?? '',
-    tipoDocumento: m['tipoDocumento'] ?? 'RELATÓRIO TÉCNICO DE CAMPO',
-    tituloLaudo: m['tituloLaudo'] ?? 'LAUDO TÉCNICO',
-    dataEmissao: m['dataEmissao'] ?? '',
-    tecnico: (m['tecnico'] ?? m['tecnicoResponsavel'] ?? '').toString(),
-    equipamentos: (m['equipamentos'] as List? ?? []).map((e) => EquipamentoRelatorio.fromMap(Map<String, dynamic>.from(e))).toList(),
-    diagnosticoTecnico: m['diagnosticoTecnico'] ?? '',
-    recomendacoesServicos: m['recomendacoesServicos'] ?? '',
-    fotos: (m['fotos'] as List? ?? []).map((f) => FotoRelatorio.fromMap(Map<String, dynamic>.from(f))).toList(),
-  );
-}
-
-class NotaApp {
-  String id;
-  String titulo;
-  String conteudo;
-  String dataHora;
-
-  NotaApp({
-    required this.id,
-    required this.titulo,
-    required this.conteudo,
-    required this.dataHora,
-  });
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'titulo': titulo,
-    'conteudo': conteudo,
-    'dataHora': dataHora,
-  };
-
-  factory NotaApp.fromMap(Map<String, dynamic> m) => NotaApp(
-    id: m['id'] ?? '',
-    titulo: m['titulo'] ?? '',
-    conteudo: m['conteudo'] ?? '',
-    dataHora: m['dataHora'] ?? '',
-  );
-}
-
-// ============================================================================
-// CACHE OFFLINE E PERSISTÊNCIA LOCAL
-// ============================================================================
-class CacheOffline {
-  static const _kSessao = 'eh_sessao_ativa';
-  static const _kUsuarios = 'eh_usuarios_locais';
-  static const _kClientes = 'eh_clientes_locais';
-  static const _kNotas = 'eh_notas_locais';
-  static const _kFilaServicos = 'eh_fila_servicos_offline';
-  static const _kSeguranca = 'eh_seguranca_gestao_master';
-  static const _kRelatoriosCondominio = 'eh_relatorios_condominio';
-
-  static Future<void> salvarSessao(UsuarioApp u, bool manterLogado) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (manterLogado) {
-      await prefs.setString(_kSessao, jsonEncode(u.toMap()));
-    } else {
-      await prefs.remove(_kSessao);
-    }
-  }
 
   static Future<UsuarioApp?> obterSessaoAtiva() async {
     final prefs = await SharedPreferences.getInstance();
@@ -1237,8 +1123,32 @@ class PdfEngine {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _construirCabecalhoEmpresa(),
-              pw.SizedBox(height: 10),
+                            _construirCabecalhoEmpresa(),
+              pw.SizedBox(height: 8),
+
+              // FAIXA DE TITULO DESTAQUE
+              if (destaque != null && destaque.trim().isNotEmpty) ...[
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                  decoration: pw.BoxDecoration(
+                    color: _corAzulMarinho,
+                    borderRadius: pw.BorderRadius.circular(3),
+                  ),
+                  child: pw.Text(
+                    destaque.trim().toUpperCase(),
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 9.5,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+              ],
+
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -1282,7 +1192,7 @@ class PdfEngine {
                   ),
                 ],
               ),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 8),
               pw.Container(
                 padding: const pw.EdgeInsets.all(8),
                 decoration: pw.BoxDecoration(
@@ -1347,8 +1257,29 @@ class PdfEngine {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 10),
-              if (equipamentos != null && equipamentos.isNotEmpty) ...[
+              pw.SizedBox(height: 8),
+
+              // CAMPO SEPARADO 1: PARECER TÉCNICO / LAUDO DESCRITIVO
+              if (laudoDescritivo != null && laudoDescritivo.trim().isNotEmpty) ...[
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(6),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey100,
+                    borderRadius: pw.BorderRadius.circular(4),
+                    border: pw.Border.all(color: _corBorda, width: 0.5),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('PARECER TÉCNICO / LAUDO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: _corAzulMarinho)),
+                      pw.SizedBox(height: 2),
+                      pw.Text(laudoDescritivo.trim(), style: const pw.TextStyle(fontSize: 7.5)),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+              ],if (equipamentos != null && equipamentos.isNotEmpty) ...[
                 pw.Container(
                   padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
                   decoration: pw.BoxDecoration(
@@ -1511,440 +1442,26 @@ class PdfEngine {
                 ),
                 pw.SizedBox(height: 8),
               ],
-              if ((obs != null && obs.isNotEmpty) || (observacoes != null && observacoes.isNotEmpty)) ...[
+                            if ((obs != null && obs.trim().isNotEmpty) || (observacoes != null && observacoes.trim().isNotEmpty)) ...[
                 pw.Container(
                   width: double.infinity,
                   padding: const pw.EdgeInsets.all(6),
                   decoration: pw.BoxDecoration(
                     color: _corFundoCinza,
                     borderRadius: pw.BorderRadius.circular(3),
+                    border: pw.Border.all(color: _corBorda, width: 0.5),
                   ),
-                  child: pw.RichText(
-                    text: pw.TextSpan(
-                      children: [
-                        pw.TextSpan(text: 'Obs/Garantia: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.black)),
-                        pw.TextSpan(text: (obs ?? observacoes ?? ''), style: const pw.TextStyle(fontSize: 8, color: _corTextoCinza)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              pw.Spacer(),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: pw.BoxDecoration(
-                  color: _corAzulMarinho,
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'TOTAL GERAL:',
-                      style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 11),
-                    ),
-                    pw.Text(
-                      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(totalCalculado),
-                      style: pw.TextStyle(color: _corCianoValor, fontWeight: pw.FontWeight.bold, fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 24),
-              _construirAssinaturas(
-                nomeEmpresaResponsavel: 'O.S. PRIME',
-                cargoEmpresa: tecnico != null && tecnico.isNotEmpty ? tecnico : 'Técnico Responsável',
-                nomeCliente: nomeCli.isNotEmpty ? nomeCli : 'Assinatura do Cliente',
-                cargoCliente: 'Assinatura do Cliente / Aceite',
-              ),
-              pw.SizedBox(height: 12),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Assinado digitalmente por O.S. PRIME • Autenticidade: $codigoAutenticidade',
-                    style: const pw.TextStyle(fontSize: 7, color: _corTextoCinza),
-                  ),
-                  pw.Text(
-                    fotos != null && fotos.isNotEmpty ? 'Página 1 de 2' : 'Página 1 de 1',
-                    style: const pw.TextStyle(fontSize: 7, color: _corTextoCinza),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    if (fotos != null && fotos.isNotEmpty) {
-      final List<pw.Widget> fotosWidgets = [];
-
-      for (var f in fotos) {
-        try {
-          final arq = File(f.caminhoArquivo);
-          if (arq.existsSync()) {
-            final bytes = arq.readAsBytesSync();
-            final imagemPdf = pw.MemoryImage(bytes is Uint8List ? bytes : Uint8List.fromList(bytes));
-
-            fotosWidgets.add(
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Container(
-                    height: 175,
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(color: _corBorda),
-                      borderRadius: pw.BorderRadius.circular(6),
-                    ),
-                    child: pw.ClipRRect(
-                      horizontalRadius: 6,
-                      verticalRadius: 6,
-                      child: pw.Image(imagemPdf, fit: pw.BoxFit.cover),
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    f.legenda.isNotEmpty ? f.legenda : 'Registro Fotográfico',
-                    style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.black),
-                  ),
-                ],
-              ),
-            );
-          }
-        } catch (_) {}
-      }
-
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          'O.S. PRIME | LAUDO FOTOGRÁFICO DE CAMPO',
-                          style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: _corAzulMarinho),
-                        ),
-                        pw.SizedBox(height: 2),
-                        pw.Text(
-                          'Comprovação técnica de serviços, equipamentos e peças da obra',
-                          style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
-                        ),
-                      ],
-                    ),
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: _corCiano, width: 1.2),
-                        borderRadius: pw.BorderRadius.circular(4),
-                      ),
-                      child: pw.Text(
-                        'CÓDIGO: $codigoAutenticidade',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: _corAzulMarinho),
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 4),
-                pw.Container(height: 1.5, color: _corCiano),
-                pw.SizedBox(height: 12),
-                pw.Expanded(
-                  child: pw.GridView(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.85,
-                    children: fotosWidgets,
-                  ),
-                ),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Anexo integrante do documento $tipoDocumento • Autenticidade pericial vinculada',
-                      style: const pw.TextStyle(fontSize: 7, color: _corTextoCinza),
-                    ),
-                    pw.Text('Página 2 de 2', style: const pw.TextStyle(fontSize: 7, color: _corTextoCinza)),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    }
-
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/${tipoDocumento.toLowerCase().replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.pdf');
-    await file.writeAsBytes(await pdf.save());
-    return file;
-  }
-
-  static Future<void> gerarECompartilhar({
-    dynamic cliente,
-    dynamic servico,
-    List<ItemServico>? itens,
-    String? tipoDoc,
-    String? destaque,
-    String? obs,
-    String? laudoDescritivo,
-    List<EquipamentoRelatorio>? equipamentos,
-    List<FotoRelatorio>? fotos,
-    String? observacoes,
-    double? valorTotal,
-    String? tecnico,
-    dynamic dados,
-    BuildContext? context,
-  }) async {
-    final file = await apenasGerarPdf(
-      cliente: cliente,
-      servico: servico,
-      itens: itens,
-      tipoDoc: tipoDoc,
-      destaque: destaque,
-      obs: obs,
-      laudoDescritivo: laudoDescritivo,
-      equipamentos: equipamentos,
-      fotos: fotos,
-      observacoes: observacoes,
-      valorTotal: valorTotal,
-      tecnico: tecnico,
-      dados: dados,
-    );
-    try {
-      await Share.shareXFiles([XFile(file.path)], text: 'Documento O.S. Prime');
-    } catch (_) {}
-  }
-
-  static Future<File> gerarPdfRelatorioCompleto(RelatorioCondominioModel r) async {
-    await carregarDadosEmpresaParaPdf();
-    final pdf = pw.Document();
-    final codigoLaudo = _gerarCodigoAutenticidade('OSP-REL');
-    final dataEmissaoTexto = r.dataEmissao.isNotEmpty
-        ? r.dataEmissao
-        : DateFormat('dd/MM/yyyy - HH:mm').format(DateTime.now());
-
-    final List<pw.Widget> listaFotosRender = [];
-    for (var foto in r.fotos) {
-      try {
-        final f = File(foto.caminhoArquivo);
-        if (f.existsSync()) {
-          final imgBytes = f.readAsBytesSync();
-          listaFotosRender.add(
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Container(
-                  height: 110,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: _corBorda),
-                    borderRadius: pw.BorderRadius.circular(4),
-                  ),
-                  child: pw.ClipRRect(
-                    horizontalRadius: 4,
-                    verticalRadius: 4,
-                    child: pw.Image(pw.MemoryImage(imgBytes is Uint8List ? imgBytes : Uint8List.fromList(imgBytes)), fit: pw.BoxFit.cover),
-                  ),
-                ),
-                pw.SizedBox(height: 3),
-                pw.Text(
-                  foto.legenda.isNotEmpty ? foto.legenda : 'Registro Fotográfico',
-                  style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
-                ),
-              ],
-            ),
-          );
-        }
-      } catch (_) {}
-    }
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        header: (pw.Context context) => _construirCabecalhoEmpresa(),
-        footer: (pw.Context context) => pw.Padding(
-          padding: const pw.EdgeInsets.only(top: 8),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text(
-                'Laudo Técnico Oficial O.S. PRIME • Cód: $codigoLaudo',
-                style: const pw.TextStyle(fontSize: 7, color: _corTextoCinza),
-              ),
-              pw.Text(
-                'Página ${context.pageNumber} de ${context.pagesCount}',
-                style: const pw.TextStyle(fontSize: 7, color: _corTextoCinza),
-              ),
-            ],
-          ),
-        ),
-        build: (pw.Context context) => [
-          pw.SizedBox(height: 8),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: _corCiano, width: 1.5),
-                  borderRadius: pw.BorderRadius.circular(16),
-                ),
-                child: pw.Text(
-                  r.tipoDocumento.toUpperCase(),
-                  style: pw.TextStyle(
-                    color: _corCiano,
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-              pw.RichText(
-                text: pw.TextSpan(
-                  children: [
-                    pw.TextSpan(text: 'EMISSÃO: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                    pw.TextSpan(text: dataEmissaoTexto, style: const pw.TextStyle(fontSize: 8)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 8),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: _corBorda),
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Column(
-              children: [
-                pw.Row(
-                  children: [
-                    pw.Expanded(
-                      child: pw.RichText(
-                        text: pw.TextSpan(
-                          children: [
-                            pw.TextSpan(text: 'CONDOMÍNIO / LOCAL: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
-                            pw.TextSpan(text: r.nomeCondominio.toUpperCase(), style: const pw.TextStyle(fontSize: 8.5)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 3),
-                pw.Row(
-                  children: [
-                    pw.Expanded(
-                      flex: 6,
-                      child: pw.RichText(
-                        text: pw.TextSpan(
-                          children: [
-                            pw.TextSpan(text: 'RESPONSÁVEL / SÍNDICO: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
-                            pw.TextSpan(text: r.sindicoResponsavel, style: const pw.TextStyle(fontSize: 8.5)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    pw.Expanded(
-                      flex: 4,
-                      child: pw.RichText(
-                        text: pw.TextSpan(
-                          children: [
-                            pw.TextSpan(text: 'FONE: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
-                            pw.TextSpan(text: r.telefone, style: const pw.TextStyle(fontSize: 8.5)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 3),
-                pw.Row(
-                  children: [
-                    pw.Expanded(
-                      child: pw.RichText(
-                        text: pw.TextSpan(
-                          children: [
-                            pw.TextSpan(text: 'ENDEREÇO: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
-                            pw.TextSpan(text: r.enderecoCompleto, style: const pw.TextStyle(fontSize: 8.5)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.symmetric(vertical: 4),
-            decoration: pw.BoxDecoration(
-              color: _corAzulMarinho,
-              borderRadius: pw.BorderRadius.circular(3),
-            ),
-            child: pw.Text(
-              r.tituloLaudo.isNotEmpty ? r.tituloLaudo.toUpperCase() : 'LAUDO TECNICO',
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9.5),
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          if (r.equipamentos.isNotEmpty) ...[
-            pw.Text(
-              'EQUIPAMENTOS AVALIADOS / OBJETO DO LAUDO:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: _corAzulMarinho),
-            ),
-            pw.SizedBox(height: 3),
-            pw.Table(
-              columnWidths: const {
-                0: pw.FlexColumnWidth(2.5),
-                1: pw.FlexColumnWidth(2.0),
-                2: pw.FlexColumnWidth(2.0),
-                3: pw.FlexColumnWidth(1.5),
-                4: pw.FlexColumnWidth(1.5),
-              },
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: _corAzulMarinho),
-                  children: [
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('TIPO', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('MARCA', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('MODELO', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('POTÊNCIA', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5))),
-                    pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text('TENSÃO', style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 7.5))),
-                  ],
-                ),
-                ...r.equipamentos.map((eq) {
-                  return pw.TableRow(
-                    decoration: const pw.BoxDecoration(
-                      border: pw.Border(bottom: pw.BorderSide(color: _corBorda, width: 0.5)),
-                    ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(eq.tipo, style: const pw.TextStyle(fontSize: 7.5))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(eq.marca, style: const pw.TextStyle(fontSize: 7.5))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(eq.modelo, style: const pw.TextStyle(fontSize: 7.5))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(eq.potencia, style: const pw.TextStyle(fontSize: 7.5))),
-                      pw.Padding(padding: const pw.EdgeInsets.all(4), child: pw.Text(eq.tensao, style: const pw.TextStyle(fontSize: 7.5))),
+                      pw.Text('OBSERVAÇÕES GERAIS / GARANTIA / CONDIÇÕES:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: _corAzulMarinho)),
+                      pw.SizedBox(height: 2),
+                      pw.Text((obs ?? observacoes ?? '').trim(), style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza)),
                     ],
-                  );
-                }),
+                  ),
+                ),
+                pw.SizedBox(height: 6),
               ],
-            ),
-            pw.SizedBox(height: 8),
-          ],
           if (r.diagnosticoTecnico.isNotEmpty) ...[
             pw.Container(
               width: double.infinity,
