@@ -26,9 +26,10 @@ jobs:
           cache: true
 
       - name: 1. Gerar Estrutura Limpa (Android + Web)
-        run: flutter create . --platforms=android,web --org com.osprime
+        run: |
+          flutter create . --platforms=android,web --org com.osprime
 
-      - name: 2. Injetar google-services.json e Chave Fixa
+      - name: 2. Injetar google-services.json, Permissoes e Chave Fixa
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
@@ -36,6 +37,9 @@ jobs:
           mkdir -p ~/.android
           cp chave_assinatura.keystore ~/.android/debug.keystore
           cp chave_assinatura.keystore android/app/debug.keystore
+
+          # Permissoes de notificacao do Android
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
 
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i '/signingConfigs {/a \        getByName("debug") { storeFile = file("debug.keystore") }' android/app/build.gradle.kts
@@ -55,10 +59,12 @@ jobs:
           fi
 
       - name: 3. Instalar Dependências
-        run: flutter pub get
+        run: |
+          flutter pub get
 
       - name: 4. Aplicar Ícones do App
-        run: dart run flutter_launcher_icons
+        run: |
+          dart run flutter_launcher_icons
 
       - name: 5. Compilar APK Comercial (Empresas Clientes)
         run: |
@@ -67,7 +73,8 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk apks_prontos/OS-Prime-Empresas-v${{ github.run_number }}.apk
 
       - name: 6. Compilar Versão Web para Escritório
-        run: flutter build web --release
+        run: |
+          flutter build web --release
 
       - name: 7. Disponibilizar APK Comercial para Download
         uses: actions/upload-artifact@v4
