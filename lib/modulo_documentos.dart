@@ -294,9 +294,22 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                 onPressed: gerandoOS
                     ? null
                     : () async {
-                        setD(() => gerandoOS = true);
+                                                setD(() => gerandoOS = true);
                         final numOS = "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}";
-                        final descOS = "[ORÇAMENTO APROVADO] ${orc['descricao_itens'] ?? ''}\n${orc['laudo_descritivo'] ?? ''}".trim();
+
+                        // Formata equipamentos na descricao para o tecnico ver na O.S. sem dar erro no banco
+                        String equipamentosTxt = '';
+                        if (orc['equipamentos'] != null && orc['equipamentos'] is List) {
+                          final listaEq = (orc['equipamentos'] as List);
+                          if (listaEq.isNotEmpty) {
+                            final nomes = listaEq.map((e) => "${e['tipo']} ${e['marca']} ${e['modelo']}".trim()).where((s) => s.isNotEmpty).join(', ');
+                            if (nomes.isNotEmpty) {
+                              equipamentosTxt = "\n[Equipamentos: $nomes]";
+                            }
+                          }
+                        }
+
+                        final descOS = "[ORÇAMENTO APROVADO] ${orc['descricao_itens'] ?? ''}\n${orc['laudo_descritivo'] ?? ''}$equipamentosTxt".trim();
 
                         final novaOS = {
                           'numero_os': numOS,
@@ -309,11 +322,10 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                           'status': 'Pendente',
                           'data_abertura': "${DateFormat('dd/MM/yyyy').format(dataExecucao)} • ${horaExecucao.format(ctx)}",
                           'visualizado_pelo_tecnico': false,
-                          'equipamentos': jsonEncode(orc['equipamentos'] ?? []),
                         };
 
                         try {
-                          await supabase.from('ordens_servico').insert(novaOS);
+                          await supabase.from('ordens_servico').insert(novaOS).timeout(const Duration(seconds: 10));
                           ServicoNotificacaoOneSignal.enviarNotificacaoOS(
                             tecnicoLogin: tecnicoSel!,
                             numeroOS: numOS,
@@ -940,7 +952,7 @@ String? _numeroOSOrigem;
   void _modalPuxarDoFaturamento() async {
     List<Map<String, dynamic>> pendentes = [];
     try {
-      final res = await supabase.from('servicos').select().order('id', ascending: false).timeout(const Duration(seconds: 4));
+      final res = await supabase.from('servicos').select().order('id', ascending: false).timeout(const Duration(seconds: 15));
       pendentes = res.where((s) => s['status'] != 'Faturado').toList();
     } catch (_) {}
 
@@ -999,7 +1011,7 @@ String? _numeroOSOrigem;
                                       _destaqueCtrl.text = 'RECIBO DE PAGAMENTO QUITADO';
                                       _itens.clear();
                                       _itens.addAll(_converterDescricaoEmItens(s['descricao'] ?? '', val));
-                                      _obsCtrl.text = "Atendimento técnico: ${s['tecnico'] ?? 'Equipe O.S. PRIME'}";
+                                      _obsCtrl.text = "Atendimento técnico: ${s['tecnico'] ?? 'Equipe ELÉTRO HEINZEN'}";
                                     });
                                     Navigator.pop(ctx);
                                   },
@@ -1027,7 +1039,7 @@ String? _numeroOSOrigem;
           .from('ordens_servico')
           .select()
           .order('id', ascending: false)
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 15));
       pendentes = List<Map<String, dynamic>>.from(res)
           .where((s) { final st = (s['status'] ?? '').toString().trim().toLowerCase(); return st != 'faturada' && st != 'cancelada' && !st.contains('exclu'); })
           .toList();
@@ -1262,7 +1274,7 @@ String? _numeroOSOrigem;
                       await CacheOffline.salvarClientesLocal(locais);
 
                       try {
-                        final res = await supabase.from('clientes').insert(novoCliente.toMap()).select().single().timeout(const Duration(seconds: 5));
+                        final res = await supabase.from('clientes').insert(novoCliente.toMap()).select().single().timeout(const Duration(seconds: 15));
                         novoCliente.id = res['id']?.toString();
                       } catch (_) {}
 
