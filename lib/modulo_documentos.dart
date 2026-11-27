@@ -498,7 +498,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     final abertos = _lista.where((o) => (o['status'] ?? '') != 'Aprovado' && !(o['status'] ?? '').toString().startsWith('Aprovado')).toList();
-    final aprovados = _lista.where((o) => (o['status'] ?? '') == 'Aprovado' || (o['status'] ?? '').toString().startsWith('Aprovado')).toList();
+    final aprovados = _lista.where((o) { final st = (o['status'] ?? '').toString(); return (st == 'Aprovado' || st.startsWith('Aprovado')) && !st.contains('Faturad') && !st.contains('Finalizad'); }).toList();
 
     return Scaffold(
       body: Column(
@@ -798,18 +798,34 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                       ),
-                    if (isAprovado)
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amberAccent,
-                          foregroundColor: Colors.black,
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        ),
-                        icon: const Icon(Icons.assignment_ind_rounded, size: 15),
-                        label: const Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                        onPressed: () => _modalDevolverOSComItens(orc),
-                      ),
+                                        if (isAprovado)
+                      Builder(builder: (ctx) {
+                        final bool jaDevolvido = status.contains('Em Execução') || status.contains('O.S.') || status.contains('Finalizado') || status.contains('Faturado');
+                        if (jaDevolvido) {
+                          return OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: corCianoSuave.withOpacity(0.5)),
+                              foregroundColor: corCianoSuave,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            ),
+                            icon: const Icon(Icons.check, size: 14, color: corCianoSuave),
+                            label: const Text('O.S. Já em Execução', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            onPressed: null,
+                          );
+                        }
+                        return ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amberAccent,
+                            foregroundColor: Colors.black,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          ),
+                          icon: const Icon(Icons.assignment_ind_rounded, size: 15),
+                          label: const Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          onPressed: () => _modalDevolverOSComItens(orc),
+                        );
+                      }),
                     const SizedBox(width: 4),
                     IconButton(
                       visualDensity: VisualDensity.compact,
@@ -1508,8 +1524,9 @@ String? _numeroOSOrigem;
     }
   }
 
-    void _modalEditarLegendaEAvariaFoto(int index) {
+      void _modalEditarLegendaEAvariaFoto(int index) {
     final legCtrl = TextEditingController(text: _fotos[index].legenda);
+    final descCtrl = TextEditingController(text: _fotos[index].descricao);
     final avariaCtrl = TextEditingController(text: _fotos[index].avaria);
 
     showDialog(
@@ -1518,25 +1535,34 @@ String? _numeroOSOrigem;
         backgroundColor: corCardFundo,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
         title: Text('📸 Detalhes da Foto #${index + 1}', style: const TextStyle(color: corCianoEletrico, fontSize: 15, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Foto travada em 4x4 cm no laudo PDF.', style: TextStyle(color: Colors.grey, fontSize: 11)),
-            const SizedBox(height: 10),
-            TextField(
-              controller: legCtrl,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Legenda da Foto *', hintText: 'Ex: Vista superior do motor', isDense: true),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: avariaCtrl,
-              textCapitalization: TextCapitalization.sentences,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Identificação de Avaria / Defeito', hintText: 'Descreva a trinca, oxidação ou defeito encontrado...', alignLabelWithHint: true),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Foto travada em 4x4 cm no laudo PDF sem cortes.', style: TextStyle(color: Colors.grey, fontSize: 11)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: legCtrl,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Legenda da Foto *', hintText: 'Ex: Vista do Motor', isDense: true),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: descCtrl,
+                textCapitalization: TextCapitalization.sentences,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Descrição da Foto', hintText: 'Detalhes complementares...', alignLabelWithHint: true),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: avariaCtrl,
+                textCapitalization: TextCapitalization.sentences,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Identificação de Avaria / Defeito', hintText: 'Ex: Oxidação, folga no eixo...', alignLabelWithHint: true),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
@@ -1546,6 +1572,7 @@ String? _numeroOSOrigem;
             onPressed: () {
               setState(() {
                 _fotos[index].legenda = legCtrl.text.trim();
+                _fotos[index].descricao = descCtrl.text.trim();
                 _fotos[index].avaria = avariaCtrl.text.trim();
               });
               Navigator.pop(ctx);

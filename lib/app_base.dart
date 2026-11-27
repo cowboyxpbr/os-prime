@@ -23,11 +23,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 const String supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
-  defaultValue: 'https://frwkzyxmqrvbnpqvgxtm.supabase.co',
+  defaultValue: 'https://rpcptrpczzdrrbquabnh.supabase.co',
 );
 const String supabaseAnonKey = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
-  defaultValue: 'sb_publishable_BTKwUTL5F_e6CiilAoyNLw_bXyF9mzQ',
+  defaultValue: 'sb_publishable_cXRSmhxE7YGoCdK0WMonRg_MB2a5zAp',
 );
 
 SupabaseClient get supabase => Supabase.instance.client;
@@ -243,23 +243,27 @@ class EquipamentoRelatorio {
 class FotoRelatorio {
   String caminhoArquivo;
   String legenda;
+  String descricao;
   String avaria;
 
   FotoRelatorio({
     required this.caminhoArquivo,
     required this.legenda,
+    this.descricao = '',
     this.avaria = '',
   });
 
   Map<String, dynamic> toMap() => {
     'caminhoArquivo': caminhoArquivo,
     'legenda': legenda,
+    'descricao': descricao,
     'avaria': avaria,
   };
 
   factory FotoRelatorio.fromMap(Map<String, dynamic> m) => FotoRelatorio(
     caminhoArquivo: m['caminhoArquivo'] ?? '',
     legenda: m['legenda'] ?? '',
+    descricao: (m['descricao'] ?? m['obs'] ?? '').toString(),
     avaria: m['avaria'] ?? '',
   );
 }
@@ -588,7 +592,7 @@ class ServicoClientes {
 // ============================================================================
 class ServicoNotificacaoOneSignal {
   // 🔔 ID OFICIAL (4708) E CHAVE REST ATIVA
-  static const String _appId = '5174ec50-0787-4708-ae16-f2674e42c657';
+  static const String _appId = '04552b74-f865-437f-94b6-4b07dc65d901';
   static const String _restApiKey =
       'os_v2_app_kf2oyuahq5dqrlqw6jtu4qwgk6vytbicuuau3fvkke63tldeo2c3rzuolaramywtc5ot2pqm2hzlnsmzw3s6gfnleoztkfhingrr6fa';
 
@@ -984,7 +988,43 @@ class PdfEngine {
     return '$prefixo-$ano-$hash';
   }
 
+    static Map<String, dynamic>? dadosEmpresaAtual;
+  static pw.MemoryImage? logoEmpresaBytes;
+
+  static Future<void> carregarDadosEmpresaParaPdf() async {
+    try {
+      final res = await supabase.from('empresas').select().limit(1).maybeSingle();
+      if (res != null) {
+        dadosEmpresaAtual = res;
+        final logoUrl = (res['logo_url'] ?? '').toString();
+        if (logoUrl.isNotEmpty) {
+          try {
+            final nomeArquivo = logoUrl.split('/').last.split('?').first;
+            final bytes = await supabase.storage.from('logos_empresas').download(nomeArquivo);
+            if (bytes.isNotEmpty) {
+              logoEmpresaBytes = pw.MemoryImage(bytes);
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   static pw.Widget _construirCabecalhoEmpresa() {
+    final nome = (dadosEmpresaAtual?['nome']?.toString().trim().isNotEmpty == true)
+        ? dadosEmpresaAtual!['nome'].toString().trim()
+        : 'O.S. PRIME';
+    final ramo = (dadosEmpresaAtual?['ramo_atividade']?.toString().trim().isNotEmpty == true)
+        ? dadosEmpresaAtual!['ramo_atividade'].toString().trim()
+        : 'Comandos Elétricos • Climatização • Manutenção Especializada';
+    final cnpj = dadosEmpresaAtual?['cnpj_cpf']?.toString().trim() ?? '';
+    final endereco = dadosEmpresaAtual?['endereco']?.toString().trim() ?? '';
+    final fone = dadosEmpresaAtual?['telefone']?.toString().trim() ?? '';
+    final whats = dadosEmpresaAtual?['whatsapp']?.toString().trim() ?? '';
+
+    final linha1 = [if (cnpj.isNotEmpty) 'Doc: $cnpj', if (endereco.isNotEmpty) endereco].join(' | ');
+    final linha2 = [if (fone.isNotEmpty) 'Fone: $fone', if (whats.isNotEmpty) 'WhatsApp: $whats'].join(' | ');
+
     return pw.Container(
       padding: const pw.EdgeInsets.only(bottom: 8),
       decoration: const pw.BoxDecoration(
@@ -993,55 +1033,25 @@ class PdfEngine {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.Container(
-            width: 58,
-            height: 48,
-            decoration: pw.BoxDecoration(
-              color: _corAzulMarinho,
-              borderRadius: pw.BorderRadius.circular(6),
+          if (logoEmpresaBytes != null)
+            pw.Container(width: 58, height: 48, child: pw.Image(logoEmpresaBytes!, fit: pw.BoxFit.contain))
+          else
+            pw.Container(
+              width: 58,
+              height: 48,
+              decoration: pw.BoxDecoration(color: _corAzulMarinho, borderRadius: pw.BorderRadius.circular(6)),
+              alignment: pw.Alignment.center,
+              child: pw.Text('OSP', style: pw.TextStyle(color: PdfColors.white, fontSize: 20, fontWeight: pw.FontWeight.bold)),
             ),
-            alignment: pw.Alignment.center,
-            child: pw.Text(
-              'EH',
-              style: pw.TextStyle(
-                color: PdfColors.white,
-                fontSize: 26,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ),
           pw.SizedBox(width: 12),
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  'ELÉTRO HEINZEN',
-                  style: pw.TextStyle(
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _corAzulMarinho,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'Comandos Elétricos • Motobombas • Saunas • Aquecedores • SPA',
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _corCiano,
-                  ),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'CNPJ: 25.454.483/0001-25 | Rua São Pedro, 234 - Perequê, Porto Belo - SC',
-                  style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
-                ),
-                pw.Text(
-                  'Fone: (47) 3050-7931 | Cel/WhatsApp: (47) 98455-3301 (Plantão)',
-                  style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza),
-                ),
+                pw.Text(nome, style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold, color: _corAzulMarinho)),
+                if (ramo.isNotEmpty) ...[pw.SizedBox(height: 2), pw.Text(ramo, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: _corCiano))],
+                if (linha1.isNotEmpty) ...[pw.SizedBox(height: 2), pw.Text(linha1, style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza))],
+                if (linha2.isNotEmpty) ...[pw.SizedBox(height: 1), pw.Text(linha2, style: const pw.TextStyle(fontSize: 7.5, color: _corTextoCinza))],
               ],
             ),
           ),
@@ -1119,6 +1129,7 @@ class PdfEngine {
     String? tecnico,
     dynamic dados,
   }) async {
+    await carregarDadosEmpresaParaPdf();
     final pdf = pw.Document();
     final tipoDocumento = (tipoDoc ?? 'ORÇAMENTO').toUpperCase();
     final codigoAutenticidade = _gerarCodigoAutenticidade('EH');
@@ -1238,7 +1249,7 @@ class PdfEngine {
                           child: pw.RichText(
                             text: pw.TextSpan(
                               children: [
-                                pw.TextSpan(text: 'CLIENTE: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                                pw.TextSpan(text: 'Cliente: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                                 pw.TextSpan(text: nomeCli.toUpperCase(), style: const pw.TextStyle(fontSize: 8.5)),
                               ],
                             ),
@@ -1249,7 +1260,7 @@ class PdfEngine {
                           child: pw.RichText(
                             text: pw.TextSpan(
                               children: [
-                                pw.TextSpan(text: 'CPF/CNPJ: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                                pw.TextSpan(text: 'Doc: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                                 pw.TextSpan(text: docCli, style: const pw.TextStyle(fontSize: 8.5)),
                               ],
                             ),
@@ -1265,7 +1276,7 @@ class PdfEngine {
                           child: pw.RichText(
                             text: pw.TextSpan(
                               children: [
-                                pw.TextSpan(text: 'ENDEREÇO: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                                pw.TextSpan(text: 'End: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                                 pw.TextSpan(text: enderecoCli, style: const pw.TextStyle(fontSize: 8.5)),
                               ],
                             ),
@@ -1276,7 +1287,7 @@ class PdfEngine {
                           child: pw.RichText(
                             text: pw.TextSpan(
                               children: [
-                                pw.TextSpan(text: 'FONE: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                                pw.TextSpan(text: 'Fone: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                                 pw.TextSpan(text: foneCli, style: const pw.TextStyle(fontSize: 8.5)),
                               ],
                             ),
@@ -1301,7 +1312,7 @@ class PdfEngine {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('PARECER TÉCNICO / LAUDO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: _corAzulMarinho)),
+                      pw.Text('PARECER TÉCNICO / LAUDO: (SEPARADO)', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: _corAzulMarinho)),
                       pw.SizedBox(height: 2),
                       pw.Text(laudoDescritivo.trim(), style: const pw.TextStyle(fontSize: 7.5)),
                     ],
@@ -1417,7 +1428,7 @@ class PdfEngine {
               ),
               pw.SizedBox(height: 24),
               _construirAssinaturas(
-                nomeEmpresaResponsavel: 'ELÉTRO HEINZEN',
+                nomeEmpresaResponsavel: (dadosEmpresaAtual?['nome']?.toString().trim().isNotEmpty == true) ? dadosEmpresaAtual!['nome'].toString() : 'O.S. PRIME',
                 cargoEmpresa: tecnico != null && tecnico.isNotEmpty ? tecnico : 'Stanley Heinzen',
                 nomeCliente: nomeCli.isNotEmpty ? nomeCli : 'Assinatura do Cliente',
                 cargoCliente: 'Assinatura do Cliente / Aceite',
@@ -1591,6 +1602,7 @@ class PdfEngine {
   }
 
   static Future<File> gerarPdfRelatorioCompleto(RelatorioCondominioModel r) async {
+    await carregarDadosEmpresaParaPdf();
     final pdf = pw.Document();
     final codigoLaudo = _gerarCodigoAutenticidade('EH-REL');
     final dataEmissaoTexto = r.dataEmissao.isNotEmpty
@@ -1725,7 +1737,7 @@ class PdfEngine {
                       child: pw.RichText(
                         text: pw.TextSpan(
                           children: [
-                            pw.TextSpan(text: 'FONE: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                            pw.TextSpan(text: 'Fone: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                             pw.TextSpan(text: r.telefone, style: const pw.TextStyle(fontSize: 8.5)),
                           ],
                         ),
@@ -1740,7 +1752,7 @@ class PdfEngine {
                       child: pw.RichText(
                         text: pw.TextSpan(
                           children: [
-                            pw.TextSpan(text: 'ENDEREÇO: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
+                            pw.TextSpan(text: 'End: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5)),
                             pw.TextSpan(text: r.enderecoCompleto, style: const pw.TextStyle(fontSize: 8.5)),
                           ],
                         ),
@@ -1860,7 +1872,7 @@ class PdfEngine {
             pw.SizedBox(height: 12),
           ],
           _construirAssinaturas(
-            nomeEmpresaResponsavel: 'ELÉTRO HEINZEN',
+            nomeEmpresaResponsavel: (dadosEmpresaAtual?['nome']?.toString().trim().isNotEmpty == true) ? dadosEmpresaAtual!['nome'].toString() : 'O.S. PRIME',
             cargoEmpresa: r.tecnico.isNotEmpty ? r.tecnico : 'Administrador Heinzen',
             nomeCliente: r.nomeCondominio.isNotEmpty ? r.nomeCondominio : 'Condomínio',
             cargoCliente: 'Assinatura do Síndico / Condomínio',
@@ -1902,6 +1914,7 @@ class PdfEngine {
     dynamic usuarioLogado,
     dynamic filtroData,
   }) async {
+    await carregarDadosEmpresaParaPdf();
     final pdf = pw.Document();
     final dataEmissaoTexto = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 

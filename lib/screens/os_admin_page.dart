@@ -18,6 +18,41 @@ class TelaOSAdmin extends StatefulWidget {
 }
 
 class _TelaOSAdminState extends State<TelaOSAdmin> {
+  final Map<String, String> _mapaDocClientesAdm = {};
+
+  Future<void> _carregarDocsSupabaseAdm() async {
+    try {
+      final locais = await CacheOffline.carregarClientesLocal();
+      for (final c in locais) {
+        if (c.nome.trim().isNotEmpty && c.documento.trim().isNotEmpty) {
+          _mapaDocClientesAdm[c.nome.trim().toLowerCase()] = c.documento.trim();
+        }
+      }
+      final res = await supabase.from('clientes').select('nome, cpf_cnpj');
+      for (final c in res) {
+        final n = (c['nome'] ?? '').toString().trim().toLowerCase();
+        final d = (c['cpf_cnpj'] ?? '').toString().trim();
+        if (n.isNotEmpty && d.isNotEmpty) _mapaDocClientesAdm[n] = d;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  String? _extrairAtendente(String desc) {
+    if (!desc.contains('[Atender no Local:')) return null;
+    try {
+      return desc.split('[Atender no Local:').last.split(']').first.trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extrairFoneAtendente(String desc) {
+    final atendente = _extrairAtendente(desc);
+    if (atendente == null) return null;
+    final nums = atendente.replaceAll(RegExp(r'[^\d]'), '');
+    return nums.length >= 8 ? nums : null;
+  }
   List<DadosCliente> _listaClientesCache = [];
   Future<void> _carregarClientesCache() async {
     try {
@@ -63,6 +98,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
         .stream(primaryKey: ['id'])
         .order('id', ascending: false);
     _carregarOfflineETecnicos();
+    _carregarDocsSupabaseAdm();
     _executarLimpezaInicial();
   }
 
@@ -564,7 +600,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
   }
 
   void _modalNovaOS() async {
-    final cC = TextEditingController(), fC = TextEditingController(), eC = TextEditingController(), pC = TextEditingController();
+    final cC = TextEditingController(), fC = TextEditingController(), eC = TextEditingController(), pC = TextEditingController(), atendenteCtrl = TextEditingController();
     String prioridadeSel = 'Normal';
     final tecnicosDisponiveis = _tecnicosDeCampo;
     
@@ -624,6 +660,8 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   const SizedBox(height: 6),
                   TextField(controller: eC, decoration: const InputDecoration(labelText: 'Endereço da Obra', isDense: true)),
                   const SizedBox(height: 6),
+                  TextField(controller: atendenteCtrl, decoration: const InputDecoration(labelText: 'Quem vai atender no local (Nome e WhatsApp)', hintText: 'Ex: Sr. Carlos (47) 99999-9999', isDense: true)),
+                  const SizedBox(height: 6),
                   TextField(controller: fC, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone', isDense: true)),
                   const SizedBox(height: 10),
                   TextField(controller: pC, minLines: 3, maxLines: 5, decoration: const InputDecoration(labelText: 'Descrição do Problema / O que fazer', alignLabelWithHint: true)),
@@ -681,7 +719,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   cliente: cC.text.trim(),
                   telefone: fC.text.trim(),
                   endereco: eC.text.trim(),
-                  descricaoProblema: pC.text.trim(),
+                  descricaoProblema: atendenteCtrl.text.trim().isNotEmpty ? '[Atender no Local: ${atendenteCtrl.text.trim()}]\n${pC.text.trim()}' : pC.text.trim(),
                   tecnicoDesignado: tecnicoSel!,
                   prioridade: prioridadeSel,
                   status: 'Pendente',
@@ -791,6 +829,8 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   TextField(controller: cC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Cliente / Condomínio *', isDense: true)),
                   const SizedBox(height: 6),
                   TextField(controller: eC, decoration: const InputDecoration(labelText: 'Endereço da Obra', isDense: true)),
+                  const SizedBox(height: 6),
+                  TextField(controller: atendenteCtrl, decoration: const InputDecoration(labelText: 'Quem vai atender no local (Nome e WhatsApp)', hintText: 'Ex: Sr. Carlos (47) 99999-9999', isDense: true)),
                   const SizedBox(height: 6),
                   TextField(controller: fC, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone', isDense: true)),
                   const SizedBox(height: 10),
@@ -1219,7 +1259,36 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                               ],
                             ),
                             const SizedBox(height: 6),
-                            Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: corTextoClaro)),
+                                                        Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: corTextoClaro)),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1, bottom: 2),
+                              child: Text(
+                                "📄 CPF/CNPJ: ${_mapaDocClientesAdm[os.cliente.trim().toLowerCase()] ?? 'Não informado'}",
+                                style: const TextStyle(fontSize: 11, color: corTextoClaro, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Builder(builder: (ctx) {
+                              final atend = _extrairAtendente(os.descricaoProblema);
+                              if (atend == null) return const SizedBox.shrink();
+                              return Container(
+                                margin: const EdgeInsets.only(top: 2, bottom: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.amberAccent.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.amberAccent.withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.person_pin_rounded, size: 14, color: Colors.amberAccent),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text("Atender no Local: $atend", style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
                             if (os.endereco.isNotEmpty) Text("📍 ${os.endereco}", style: const TextStyle(fontSize: 11, color: corCianoSuave)),
                             if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                             const SizedBox(height: 4),

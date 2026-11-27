@@ -1022,43 +1022,88 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                           child: Text(s['descricao'] ?? '', style: const TextStyle(fontSize: 12, color: corTextoClaro)),
                                         ),
                                         const Divider(height: 12),
-                                                                                Row(children: [
-                                          TextButton.icon(
-                                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                                            icon: const Icon(Icons.edit_note, size: 16, color: Colors.amberAccent),
-                                            label: const Text('Preços', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
-                                            onPressed: () => _modalGerenciarItensDoServico(s),
-                                          ),
-                                          if (!fat && s['descricao'] != null && (s['descricao'].toString().contains('[OS') || s['descricao'].toString().contains('[O.S'))) ...[
-                                            TextButton.icon(
-                                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                                              icon: const Icon(Icons.replay, size: 14, color: Colors.orangeAccent),
-                                              label: const Text('Devolver O.S.', style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                                              onPressed: () => _modalDevolverOS(s),
-                                            ),
-                                          ],
-                                          PopupMenuButton<String>(
-                                            tooltip: 'Gerar PDF',
-                                            icon: const Icon(Icons.picture_as_pdf, color: corCianoEletrico, size: 18),
-                                            onSelected: (tipo) => _gerarDocDiretoDoServico(s, tipo),
-                                            itemBuilder: (_) => const [
-                                              PopupMenuItem(value: 'ORÇAMENTO', child: Text('Gerar Orçamento PDF')),
-                                              PopupMenuItem(value: 'RECIBO', child: Text('Gerar Recibo PDF')),
+                                        SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: Row(
+                                            children: [
+                                              if (!fat) ...[
+                                                OutlinedButton.icon(
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: const BorderSide(color: Colors.amberAccent, width: 1),
+                                                    foregroundColor: Colors.amberAccent,
+                                                    visualDensity: VisualDensity.compact,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                                  ),
+                                                  icon: const Icon(Icons.attach_money, size: 15),
+                                                  label: const Text('Editar', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                                  onPressed: () => _modalGerenciarItensDoServico(s),
+                                                ),
+                                                const SizedBox(width: 4),
+                                              ],
+                                              if (!fat && s['descricao'] != null && (s['descricao'].toString().contains('[OS') || s['descricao'].toString().contains('[O.S'))) ...[
+                                                OutlinedButton.icon(
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: const BorderSide(color: Colors.orangeAccent, width: 1),
+                                                    foregroundColor: Colors.orangeAccent,
+                                                    visualDensity: VisualDensity.compact,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                                  ),
+                                                  icon: const Icon(Icons.replay_rounded, size: 13),
+                                                  label: const Text('O.S.', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                                  onPressed: () => _modalDevolverOS(s),
+                                                ),
+                                                const SizedBox(width: 4),
+                                              ],
+                                              Container(
+                                                height: 26,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: corCianoEletrico.withOpacity(0.6), width: 1),
+                                                ),
+                                                child: PopupMenuButton<String>(
+                                                  tooltip: 'Gerar PDF',
+                                                  padding: EdgeInsets.zero,
+                                                  icon: const Icon(Icons.picture_as_pdf, color: corCianoEletrico, size: 15),
+                                                  onSelected: (tipo) => _gerarDocDiretoDoServico(s, tipo),
+                                                  itemBuilder: (_) => const [
+                                                    PopupMenuItem(value: 'ORÇAMENTO', child: Text('Gerar Orçamento PDF')),
+                                                    PopupMenuItem(value: 'RECIBO', child: Text('Gerar Recibo PDF')),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  side: BorderSide(color: fat ? Colors.amberAccent : corVerdeWhats, width: 1),
+                                                  foregroundColor: fat ? Colors.amberAccent : corVerdeWhats,
+                                                  visualDensity: VisualDensity.compact,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                                ),
+                                                icon: Icon(fat ? Icons.undo : Icons.check_circle, size: 13),
+                                                label: Text(fat ? 'Reverter' : 'Faturar', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                                                onPressed: () => _alternarStatusFaturado(s),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                height: 26,
+                                                width: 26,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1),
+                                                ),
+                                                child: IconButton(
+                                                  padding: EdgeInsets.zero,
+                                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 15),
+                                                  tooltip: 'Excluir',
+                                                  onPressed: () => _confirmarExclusaoServico(s['id']),
+                                                ),
+                                              ),
                                             ],
                                           ),
-                                          TextButton.icon(
-                                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                                            icon: Icon(fat ? Icons.undo : Icons.check_circle, size: 15, color: fat ? Colors.amberAccent : corVerdeWhats),
-                                            label: Text(fat ? 'Reverter' : 'Faturar', style: TextStyle(color: fat ? Colors.amberAccent : corVerdeWhats, fontWeight: FontWeight.bold, fontSize: 11)),
-                                            onPressed: () => _alternarStatusFaturado(s),
-                                          ),
-                                          const Spacer(),
-                                          IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            icon: const Icon(Icons.delete, color: Colors.redAccent, size: 18),
-                                            onPressed: () => _confirmarExclusaoServico(s['id']),
-                                          ),
-                                        ]),
+                                        ),
                                       ],
                                     ),
                                   ),
