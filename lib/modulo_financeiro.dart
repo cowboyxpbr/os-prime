@@ -464,7 +464,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text('VALOR TOTAL DO FATURAMENTO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white)),
-                            Text('R$ ${totalAtualizado.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: corCianoEletrico)),
+                            Text('R\$ ${totalAtualizado.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: corCianoEletrico)),
                           ],
                         ),
                       ),

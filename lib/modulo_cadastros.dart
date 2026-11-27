@@ -18,27 +18,57 @@ class _TelaClientesState extends State<TelaClientes> {
     _carregarDados();
   }
 
-  Future<void> _carregarDados() async {
+    Future<void> _carregarDados() async {
     final locais = await CacheOffline.carregarClientesLocal();
     if (mounted) setState(() => _lista = locais);
 
     try {
-      final res = await supabase.from('clientes').select().order('nome').timeout(const Duration(seconds: 4));
+      final res = await supabase.from('clientes').select().order('nome').timeout(const Duration(seconds: 15));
+      final List<DadosCliente> remotos = [];
       if (res.isNotEmpty) {
-        final remotos = (res as List).map((m) => DadosCliente.fromMap(Map<String, dynamic>.from(m))).toList();
-        final Map<String, DadosCliente> mapa = {};
-        for (var c in remotos) {
-          if (c.id != null) mapa[c.id!] = c;
+        for (final m in (res as List)) {
+          remotos.add(DadosCliente.fromMap(Map<String, dynamic>.from(m)));
         }
-        for (var c in locais) {
-          if (c.id != null && !mapa.containsKey(c.id)) {
-            mapa[c.id!] = c;
-          }
-        }
-        final unificada = mapa.values.toList();
-        await CacheOffline.salvarClientesLocal(unificada);
-        if (mounted) setState(() => _lista = unificada);
       }
+
+      // 🚀 SUBIDA AUTOMÁTICA: Pega os clientes do celular que não estão na nuvem e grava no Supabase
+      final Set<String> nomesNaNuvem = remotos.map((c) => c.nome.trim().toLowerCase()).toSet();
+      for (final loc in locais) {
+        if (loc.nome.trim().isNotEmpty && !nomesNaNuvem.contains(loc.nome.trim().toLowerCase())) {
+          try {
+            final payloadSubida = {
+              'nome': loc.nome,
+              'responsavel': loc.responsavel,
+              'telefone': loc.telefone,
+              'cpf_cnpj': loc.documento,
+              'email': loc.email,
+              'endereco': loc.endereco,
+              'bairro': loc.bairro,
+              'cidade': loc.cidade,
+              'complemento': loc.complemento,
+            };
+            final ins = await supabase.from('clientes').insert(payloadSubida).select().maybeSingle().timeout(const Duration(seconds: 8));
+            if (ins != null && ins['id'] != null) {
+              loc.id = ins['id'].toString();
+            }
+            remotos.add(loc);
+            nomesNaNuvem.add(loc.nome.trim().toLowerCase());
+          } catch (_) {}
+        }
+      }
+
+      final Map<String, DadosCliente> mapa = {};
+      for (var c in remotos) {
+        mapa[c.nome.trim().toLowerCase()] = c;
+      }
+      for (var c in locais) {
+        mapa.putIfAbsent(c.nome.trim().toLowerCase(), () => c);
+      }
+
+      final unificada = mapa.values.toList();
+      unificada.sort((a, b) => a.nome.toLowerCase().compareTo(b.nome.toLowerCase()));
+      await CacheOffline.salvarClientesLocal(unificada);
+      if (mounted) setState(() => _lista = unificada);
     } catch (_) {}
   }
 
@@ -143,8 +173,7 @@ class _TelaClientesState extends State<TelaClientes> {
                           'responsavel': clienteAtualizado.responsavel,
                           'telefone': clienteAtualizado.telefone,
                           'cpf_cnpj': clienteAtualizado.documento,
-                          'documento': clienteAtualizado.documento,
-                          'email': clienteAtualizado.email,
+                                                    'email': clienteAtualizado.email,
                           'endereco': clienteAtualizado.endereco,
                           'bairro': clienteAtualizado.bairro,
                           'cidade': clienteAtualizado.cidade,
