@@ -1,3 +1,4 @@
+import 'servico_licenca_bugs.dart';
 // ============================================================================
 // ARQUIVO: FATURAMENTO NA NUVEM E RELATÓRIO CONSOLIDADO SEPARADO
 // lib/modulo_financeiro.dart
@@ -32,7 +33,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
   @override
   void initState() {
     super.initState();
-    _stream = supabase.from('servicos').stream(primaryKey: ['id']).order('id', ascending: false);
+    _stream = ServicoLicencaBugs.streamTabelaSegura('servicos', orderBy: 'id', ascending: false);
     _carregarOffline();
   }
 

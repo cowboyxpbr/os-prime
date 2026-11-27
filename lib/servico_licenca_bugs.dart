@@ -63,7 +63,7 @@ class ServicoLicencaBugs {
           yield lista;
         }
       } catch (_) {}
-      await Future.delayed(const Duration(seconds: 8));
+      await Future.delayed(const Duration(seconds: 5));
     }
   }
 
