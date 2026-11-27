@@ -115,6 +115,42 @@ class TelaListaOrcamentosSalvos extends StatefulWidget {
 }
 
 class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
+  List<ItemServico> _converterItensParaOS(String descricao, num valorTotal) {
+    if (descricao.trim().isEmpty) return [];
+    final partes = descricao.split(' | ');
+    final List<ItemServico> resultado = [];
+
+    for (var p in partes) {
+      final itemStr = p.trim();
+      final regexCompleto = RegExp(r'^(\d+(?:\.\d+)?)\s*x\s*(.*?)\s*\(\s*R\$\s*(\d+(?:[\.,]\d+)?)\s*\)$');
+      final matchCompleto = regexCompleto.firstMatch(itemStr);
+
+      if (matchCompleto != null) {
+        final q = double.tryParse(matchCompleto.group(1)!) ?? 1;
+        final d = matchCompleto.group(2) ?? '';
+        final v = double.tryParse(matchCompleto.group(3)!.replaceAll(',', '.')) ?? 0;
+        resultado.add(ItemServico(descricao: d, quantidade: q, valorUnitario: v));
+        continue;
+      }
+
+      final regexSimples = RegExp(r'^(\d+(?:\.\d+)?)\s*x\s*(.*)$');
+      final matchSimples = regexSimples.firstMatch(itemStr);
+      if (matchSimples != null) {
+        final q = double.tryParse(matchSimples.group(1)!) ?? 1;
+        final d = matchSimples.group(2) ?? '';
+        resultado.add(ItemServico(descricao: d, quantidade: q, valorUnitario: 0.0));
+        continue;
+      }
+
+      resultado.add(ItemServico(descricao: itemStr, quantidade: 1, valorUnitario: 0.0));
+    }
+
+    if (resultado.length == 1 && resultado.first.valorUnitario == 0 && valorTotal > 0) {
+      resultado.first.valorUnitario = valorTotal.toDouble() / resultado.first.quantidade;
+    }
+
+    return resultado;
+  }
   List<Map<String, dynamic>> _lista = [];
   List<Map<String, dynamic>> _osAguardandoOrcamento = [];
   List<String> _tecnicosDisponiveis = [];
@@ -207,7 +243,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     final num valTotal = orc['valor_total'] is num ? orc['valor_total'] : 0.0;
     final List<ItemServico> todosItens = (orc['itens_lista'] != null && orc['itens_lista'] is List)
         ? (orc['itens_lista'] as List).map((e) => ItemServico.fromMap(Map<String, dynamic>.from(e))).toList()
-        : _converterDescricaoEmItens(orc['descricao_itens'] ?? '', valTotal);
+        : _converterItensParaOS(orc['descricao_itens'] ?? '', valTotal);
 
     final Set<int> itensSelecionados = Set.from(List.generate(todosItens.length, (i) => i));
     bool despachando = false;
