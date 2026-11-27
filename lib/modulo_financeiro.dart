@@ -428,7 +428,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                           Text(it.descricao, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corTextoClaro)),
                                           const SizedBox(height: 4),
                                           Text(
-                                            "${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade} un x R$ ${it.valorUnitario.toStringAsFixed(2)} = R$ ${it.subtotal.toStringAsFixed(2)}",
+                                            "${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade} un x R\$ ${it.valorUnitario.toStringAsFixed(2)} = R\$ ${it.subtotal.toStringAsFixed(2)}",
                                             style: const TextStyle(color: corCianoSuave, fontSize: 12),
                                           ),
                                         ],
