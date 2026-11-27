@@ -266,103 +266,214 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
   void _modalGerenciarItensDoServico(Map<String, dynamic> servico) {
     final num valorTotalOriginal = servico['valor_unitario'] is num ? servico['valor_unitario'] : 0;
     final List<ItemServico> itens = _converterDescricaoEmItens(servico['descricao']?.toString() ?? '', valorTotalOriginal);
-    String situacaoFaturamento = (servico['status'] ?? 'Emitir NF').toString();
-    if (situacaoFaturamento != 'Emitir NF' && situacaoFaturamento != 'Emitir Recibo' && situacaoFaturamento != 'Aguardando Parcela' && situacaoFaturamento != 'Faturado') { situacaoFaturamento = 'Emitir NF'; }
+    String situacaoFaturamento = (servico['status'] ?? 'Emitir NF').toString().trim();
+    if (situacaoFaturamento != 'Emitir NF' && situacaoFaturamento != 'Emitir Recibo' && situacaoFaturamento != 'Aguardando Parcela' && situacaoFaturamento != 'Faturado') {
+      situacaoFaturamento = 'Emitir NF';
+    }
+    bool salvando = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setM) {
           final double totalAtualizado = itens.fold(0.0, (acc, it) => acc + it.subtotal);
-          return AlertDialog(
-            backgroundColor: corCardFundo,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
-            title: Text('🛠️ Precificar - ${servico['cliente']}', style: const TextStyle(color: corCianoEletrico, fontSize: 15)),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+
+          return Dialog.fullscreen(
+            child: Scaffold(
+              backgroundColor: corFundoApp,
+              appBar: AppBar(
+                backgroundColor: corCardFundo,
+                elevation: 2,
+                leading: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                  tooltip: 'Cancelar e Voltar',
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Peças e Mão de Obra:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corTextoClaro)),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-                          icon: const Icon(Icons.add, size: 14),
-                          label: const Text('Adicionar', style: TextStyle(fontSize: 11)),
-                          onPressed: () => _modalItemDialog(parentCtx: ctx, onSalvar: (novo) => setM(() => itens.add(novo))),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (itens.isEmpty)
-                      Container(padding: const EdgeInsets.all(12), child: const Center(child: Text('Nenhum item adicionado.', style: TextStyle(color: Colors.grey, fontSize: 12))))
-                    else
-                      ...itens.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final it = entry.value;
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(it.descricao, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
-                            subtitle: Text("${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade} un x R\$ ${it.valorUnitario.toStringAsFixed(2)} = R\$ ${it.subtotal.toStringAsFixed(2)}", style: const TextStyle(color: corCianoSuave, fontSize: 11)),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(icon: const Icon(Icons.edit, color: corCianoSuave, size: 16), onPressed: () => _modalItemDialog(parentCtx: ctx, itemEdit: it, onSalvar: (ed) => setM(() => itens[idx] = ed))),
-                                IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent, size: 16), onPressed: () => setM(() => itens.removeAt(idx))),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                                        const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: situacaoFaturamento,
-                      dropdownColor: corCardFundo,
-                      decoration: const InputDecoration(labelText: 'Situação / Ação do Faturamento', isDense: true),
-                      items: const [
-                        DropdownMenuItem(value: 'Emitir NF', child: Text('📄 Emitir NF', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold))),
-                        DropdownMenuItem(value: 'Emitir Recibo', child: Text('🧾 Emitir Recibo', style: TextStyle(color: corCianoEletrico, fontSize: 12, fontWeight: FontWeight.bold))),
-                        DropdownMenuItem(value: 'Aguardando Parcela', child: Text('⏳ Aguardando Parcela', style: TextStyle(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold))),
-                        DropdownMenuItem(value: 'Faturado', child: Text('✅ Quitado / Faturado', style: TextStyle(color: corVerdeWhats, fontSize: 12, fontWeight: FontWeight.bold))),
-                      ],
-                      onChanged: (v) => setM(() => situacaoFaturamento = v ?? 'Emitir NF'),
-                    ),
-                    const Divider(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('TOTAL:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corTextoClaro)),
-                        Text('R\$ ${totalAtualizado.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: corCianoEletrico)),
-                      ],
-                    ),
+                    const Text('Editar Faturamento', style: TextStyle(color: corCianoEletrico, fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Cliente: ${servico['cliente'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 11)),
                   ],
+                ),
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: corVerdeWhats,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: salvando
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.check_rounded, size: 18),
+                      label: const Text('Salvar Faturamento', style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: salvando
+                          ? null
+                          : () async {
+                              setM(() => salvando = true);
+                              final novaDescricao = _formatarItensEmDescricao(itens);
+                              try {
+                                await supabase.from('servicos').update({
+                                  'descricao': novaDescricao,
+                                  'quantidade': 1,
+                                  'valor_unitario': totalAtualizado,
+                                  'status': situacaoFaturamento,
+                                }).eq('id', servico['id']).timeout(const Duration(seconds: 15));
+
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(backgroundColor: Colors.green, content: Text('✅ Faturamento salvo com sucesso!')),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao salvar: $e')));
+                              } finally {
+                                if (ctx.mounted) setM(() => salvando = false);
+                              }
+                            },
+                    ),
+                  ),
+                ],
+              ),
+              body: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // SELEÇÃO AMPLA DA SITUAÇÃO DO FATURAMENTO (3 OPÇÕES)
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: corCardFundo,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: corCianoEletrico.withOpacity(0.5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('SITUAÇÃO / AÇÃO DO FATURAMENTO:', style: TextStyle(color: corCianoEletrico, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<String>(
+                              value: situacaoFaturamento,
+                              dropdownColor: const Color(0xFF142030),
+                              decoration: const InputDecoration(
+                                labelText: 'Selecione a situação atual',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: 'Emitir NF', child: Text('📄 Emitir NF (Nota Fiscal)', style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold))),
+                                DropdownMenuItem(value: 'Emitir Recibo', child: Text('🧾 Emitir Recibo de Pagamento', style: TextStyle(color: corCianoEletrico, fontSize: 13, fontWeight: FontWeight.bold))),
+                                DropdownMenuItem(value: 'Aguardando Parcela', child: Text('⏳ Aguardando Parcela / Pagamento', style: TextStyle(color: Colors.orangeAccent, fontSize: 13, fontWeight: FontWeight.bold))),
+                                DropdownMenuItem(value: 'Faturado', child: Text('✅ Quitado / Faturado', style: TextStyle(color: corVerdeWhats, fontSize: 13, fontWeight: FontWeight.bold))),
+                              ],
+                              onChanged: (v) => setM(() => situacaoFaturamento = v ?? 'Emitir NF'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // LISTA AMPLA DE PEÇAS E SERVIÇOS
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Peças e Serviços Executados:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: corTextoClaro)),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: corCianoEletrico,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Adicionar Item', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () => _modalItemDialog(parentCtx: ctx, onSalvar: (novo) => setM(() => itens.add(novo))),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (itens.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(color: corCardFundo, borderRadius: BorderRadius.circular(10)),
+                          child: const Center(
+                            child: Text('Nenhuma peça ou serviço listado.\nToque em "+ Adicionar Item" acima.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: itens.length,
+                          itemBuilder: (_, idx) {
+                            final it = itens[idx];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              color: corCardFundo,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: Colors.white12)),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(it.descricao, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corTextoClaro)),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            "${it.quantidade % 1 == 0 ? it.quantidade.toInt() : it.quantidade} un x R$ ${it.valorUnitario.toStringAsFixed(2)} = R$ ${it.subtotal.toStringAsFixed(2)}",
+                                            style: const TextStyle(color: corCianoSuave, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: corCianoSuave, size: 20),
+                                      tooltip: 'Editar Item',
+                                      onPressed: () => _modalItemDialog(parentCtx: ctx, itemEdit: it, onSalvar: (ed) => setM(() => itens[idx] = ed)),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                      tooltip: 'Remover',
+                                      onPressed: () => setM(() => itens.removeAt(idx)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 20),
+
+                      // TOTALIZADOR GERAL DESTACADO
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF142030),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: corCianoEletrico.withOpacity(0.6), width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('VALOR TOTAL DO FATURAMENTO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white)),
+                            Text('R$ ${totalAtualizado.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: corCianoEletrico)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                    ],
+                  ),
                 ),
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6)),
-                child: const Text('Salvar Preços'),
-                onPressed: () async {
-                  final novaDescricao = _formatarItensEmDescricao(itens);
-                  try {
-                    await supabase.from('servicos').update({
-                      'descricao': novaDescricao,
-                      'quantidade': 1,
-                      'valor_unitario': totalAtualizado,
-                      'status': situacaoFaturamento,
-                    }).eq('id', servico['id']).timeout(const Duration(seconds: 5));
-                  } catch (_) {}
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-              ),
-            ],
           );
         },
       ),
@@ -657,11 +768,10 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   }
                 }
 
-                                final listaFiltrada = todos.where((s) {
+                                                final listaFiltrada = todos.where((s) {
                   final st = (s['status'] ?? 'Pendente').toString().trim();
                   final bool isQuitado = st == 'Faturado' || st == 'Quitado';
 
-                  // Na aba Pendente mostra TUDO que ainda nao foi quitado
                   if (_aba == 'Pendente') {
                     if (isQuitado) return false;
                   } else {
