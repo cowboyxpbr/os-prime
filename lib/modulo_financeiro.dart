@@ -265,6 +265,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
   void _modalGerenciarItensDoServico(Map<String, dynamic> servico) {
     final num valorTotalOriginal = servico['valor_unitario'] is num ? servico['valor_unitario'] : 0;
     final List<ItemServico> itens = _converterDescricaoEmItens(servico['descricao']?.toString() ?? '', valorTotalOriginal);
+    String situacaoFaturamento = (servico['status'] ?? 'Emitir NF').toString();
+    if (situacaoFaturamento != 'Emitir NF' && situacaoFaturamento != 'Emitir Recibo' && situacaoFaturamento != 'Aguardando Parcela' && situacaoFaturamento != 'Faturado') { situacaoFaturamento = 'Emitir NF'; }
 
     showDialog(
       context: context,
@@ -316,6 +318,19 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                           ),
                         );
                       }),
+                                        const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: situacaoFaturamento,
+                      dropdownColor: corCardFundo,
+                      decoration: const InputDecoration(labelText: 'Situação / Ação do Faturamento', isDense: true),
+                      items: const [
+                        DropdownMenuItem(value: 'Emitir NF', child: Text('📄 Emitir NF', style: TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold))),
+                        DropdownMenuItem(value: 'Emitir Recibo', child: Text('🧾 Emitir Recibo', style: TextStyle(color: corCianoEletrico, fontSize: 12, fontWeight: FontWeight.bold))),
+                        DropdownMenuItem(value: 'Aguardando Parcela', child: Text('⏳ Aguardando Parcela', style: TextStyle(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold))),
+                        DropdownMenuItem(value: 'Faturado', child: Text('✅ Quitado / Faturado', style: TextStyle(color: corVerdeWhats, fontSize: 12, fontWeight: FontWeight.bold))),
+                      ],
+                      onChanged: (v) => setM(() => situacaoFaturamento = v ?? 'Emitir NF'),
+                    ),
                     const Divider(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -340,6 +355,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                       'descricao': novaDescricao,
                       'quantidade': 1,
                       'valor_unitario': totalAtualizado,
+                      'status': situacaoFaturamento,
                     }).eq('id', servico['id']).timeout(const Duration(seconds: 5));
                   } catch (_) {}
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -572,6 +588,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
   void _gerarDocDiretoDoServico(Map<String, dynamic> servico, String tipoDoc) {
     final num valorTotalOriginal = servico['valor_unitario'] is num ? servico['valor_unitario'] : 0;
     final List<ItemServico> itens = _converterDescricaoEmItens(servico['descricao']?.toString() ?? '', valorTotalOriginal);
+    String situacaoFaturamento = (servico['status'] ?? 'Emitir NF').toString();
+    if (situacaoFaturamento != 'Emitir NF' && situacaoFaturamento != 'Emitir Recibo' && situacaoFaturamento != 'Aguardando Parcela' && situacaoFaturamento != 'Faturado') { situacaoFaturamento = 'Emitir NF'; }
 
     final clienteObj = DadosCliente(
       nome: servico['cliente'] ?? '',
@@ -840,11 +858,32 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                                                                                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                                           Expanded(child: Text(s['cliente'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, color: corTextoClaro, fontSize: 15))),
-                                          Text(
-                                            semPreco ? 'Aguardando Valor' : moeda.format(totalValor),
-                                            style: TextStyle(fontWeight: FontWeight.bold, color: semPreco ? Colors.amberAccent : (fat ? corVerdeWhats : corCianoEletrico), fontSize: 14),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                semPreco ? 'Aguardando Valor' : moeda.format(totalValor),
+                                                style: TextStyle(fontWeight: FontWeight.bold, color: semPreco ? Colors.amberAccent : (fat ? corVerdeWhats : corCianoEletrico), fontSize: 14),
+                                              ),
+                                              Container(
+                                                margin: const EdgeInsets.only(top: 2),
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: (s['status'] == 'Emitir NF' ? Colors.amberAccent : (s['status'] == 'Emitir Recibo' ? corCianoEletrico : (s['status'] == 'Aguardando Parcela' ? Colors.orangeAccent : corVerdeWhats))).withOpacity(0.18),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  (s['status'] ?? 'Pendente').toString().toUpperCase(),
+                                                  style: TextStyle(
+                                                    color: s['status'] == 'Emitir NF' ? Colors.amberAccent : (s['status'] == 'Emitir Recibo' ? corCianoEletrico : (s['status'] == 'Aguardando Parcela' ? Colors.orangeAccent : corVerdeWhats)),
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ]),
                                         if (s['endereco'] != null && s['endereco'].toString().isNotEmpty)
