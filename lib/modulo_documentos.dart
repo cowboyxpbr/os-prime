@@ -172,13 +172,14 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
 
     // Carrega O.S. que os técnicos enviaram para orçamento da rua
     List<Map<String, dynamic>> listaOS = [];
-    dynamic res;
+    
     try {
-      res = await supabase
+      final res = await supabase
           .from('ordens_servico')
           .select()
           .order('id', ascending: false)
           .timeout(const Duration(seconds: 10));
+      _todasOSDoBanco = List<Map<String, dynamic>>.from(res);
       listaOS = List<Map<String, dynamic>>.from(res)
           .where((s) => (s['status'] ?? '').toString().trim().toLowerCase() == 'aguardando orçamento')
           .toList();
@@ -188,7 +189,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
       setState(() {
         _lista = orcs;
         _osAguardandoOrcamento = listaOS;
-        _todasOSDoBanco = List<Map<String, dynamic>>.from(res ?? []);
+        
         _carregando = false;
       });
     }
@@ -196,7 +197,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
 
   Future<void> _carregarTecnicos() async {
     try {
-      res = await supabase.from('usuarios').select('nome, cargo, usuario').order('nome');
+      final res = await supabase.from('usuarios').select('nome, cargo, usuario').order('nome');
       final lista = (res as List)
           .where((u) => (u['cargo'] ?? '').toString().toLowerCase() != 'master' && (u['usuario'] ?? '').toString().toLowerCase() != 'admin')
           .map((u) => (u['nome'] ?? u['usuario'] ?? '').toString().trim())
@@ -501,7 +502,25 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     final abertos = _lista.where((o) => (o['status'] ?? '') != 'Aprovado' && !(o['status'] ?? '').toString().startsWith('Aprovado')).toList();
-    
+    final aprovados = _lista.where((o) {
+      final st = (o['status'] ?? '').toString();
+      if (st != 'Aprovado' && !st.startsWith('Aprovado')) return false;
+      if (st.contains('Faturad') || st.contains('Finalizad')) return false;
+
+      final numOS = (o['numero_os_origem'] ?? '').toString().trim().toLowerCase();
+      final cliNome = (o['cliente_nome'] ?? '').toString().trim().toLowerCase();
+      final osConcluida = _todasOSDoBanco.any((os) {
+        final stOS = (os['status'] ?? '').toString().trim().toLowerCase();
+        final concluidaOuFat = stOS == 'concluída' || stOS == 'concluida' || stOS == 'faturada';
+        if (!concluidaOuFat) return false;
+        final nBanco = (os['numero_os'] ?? '').toString().trim().toLowerCase();
+        final cBanco = (os['cliente'] ?? '').toString().trim().toLowerCase();
+        return (numOS.isNotEmpty && nBanco == numOS) || (cliNome.isNotEmpty && cBanco == cliNome);
+      });
+      return !osConcluida;
+    }).toList();
+
+    final listaAtiva = _abaOrcamentos == 'Aberto' ? abertos : aprovados;
 
     return Scaffold(
       body: Column(
@@ -789,7 +808,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                       },
                     ),
                     const Spacer(),
-                    if (!isAprovado)
+                                        if (!isAprovado)
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: corVerdeWhats,
@@ -801,7 +820,44 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                       ),
-                                        
+                    if (isAprovado)
+                      Builder(builder: (ctx) {
+                        final numOS = (orc['numero_os_origem'] ?? '').toString().trim().toLowerCase();
+                        final cliNome = (orc['cliente_nome'] ?? '').toString().trim().toLowerCase();
+                        final bool jaEmAndamentoNoBanco = _todasOSDoBanco.any((os) {
+                          final stOS = (os['status'] ?? '').toString().trim().toLowerCase();
+                          if (stOS == 'aguardando orçamento' || stOS == 'aguardando orcamento') return false;
+                          final nBanco = (os['numero_os'] ?? '').toString().trim().toLowerCase();
+                          final cBanco = (os['cliente'] ?? '').toString().trim().toLowerCase();
+                          return (numOS.isNotEmpty && nBanco == numOS) || (cliNome.isNotEmpty && cBanco == cliNome);
+                        });
+
+                        final bool jaDevolvido = jaEmAndamentoNoBanco || status.contains('Em Execução') || status.contains('O.S.') || status.contains('Finalizado') || status.contains('Faturado');
+                        if (jaDevolvido) {
+                          return OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: corCianoSuave.withOpacity(0.5)),
+                              foregroundColor: corCianoSuave,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            ),
+                            icon: const Icon(Icons.check_circle_outline, size: 14, color: corCianoSuave),
+                            label: const Text('O.S. em Execução', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            onPressed: null,
+                          );
+                        }
+                        return ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amberAccent,
+                            foregroundColor: Colors.black,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          ),
+                          icon: const Icon(Icons.assignment_ind_rounded, size: 15),
+                          label: const Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          onPressed: () => _modalDevolverOSComItens(orc),
+                        );
+                      }),
                     const SizedBox(width: 4),
                     IconButton(
                       visualDensity: VisualDensity.compact,
@@ -1137,7 +1193,7 @@ String? _numeroOSOrigem;
   void _modalPuxarDoFaturamento() async {
     List<Map<String, dynamic>> pendentes = [];
     try {
-      res = await supabase.from('servicos').select().order('id', ascending: false).timeout(const Duration(seconds: 15));
+      final res = await supabase.from('servicos').select().order('id', ascending: false).timeout(const Duration(seconds: 15));
       pendentes = res.where((s) => s['status'] != 'Faturado').toList();
     } catch (_) {}
 
@@ -1220,7 +1276,7 @@ String? _numeroOSOrigem;
   void _modalPuxarDaOS() async {
     List<Map<String, dynamic>> pendentes = [];
     try {
-      res = await supabase
+      final res = await supabase
           .from('ordens_servico')
           .select()
           .order('id', ascending: false)
@@ -1459,7 +1515,7 @@ String? _numeroOSOrigem;
                       await CacheOffline.salvarClientesLocal(locais);
 
                       try {
-                        res = await supabase.from('clientes').insert(novoCliente.toMap()).select().single().timeout(const Duration(seconds: 15));
+                        final res = await supabase.from('clientes').insert(novoCliente.toMap()).select().single().timeout(const Duration(seconds: 15));
                         novoCliente.id = res['id']?.toString();
                       } catch (_) {}
 

@@ -491,6 +491,91 @@ class CacheOffline {
 
   
 
+  static Future<int> sincronizarFilaComNuvem() async {
+    int sucessos = 0;
+
+    // 🚀 1. SOBE TODOS OS CLIENTES DO CELULAR PARA O SUPABASE AUTOMATICAMENTE
+    try {
+      final locaisCli = await carregarClientesLocal();
+      if (locaisCli.isNotEmpty) {
+        final resRemotos = await supabase.from('clientes').select('id, nome, cpf_cnpj').timeout(const Duration(seconds: 10));
+        final Set<String> nomesBanco = {};
+        for (final r in (resRemotos as List)) {
+          final n = (r['nome'] ?? '').toString().trim().toLowerCase();
+          if (n.isNotEmpty) nomesBanco.add(n);
+        }
+
+        bool atualizouId = false;
+        for (final loc in locaisCli) {
+          final nomeLimpo = loc.nome.trim();
+          if (nomeLimpo.isEmpty || nomesBanco.contains(nomeLimpo.toLowerCase())) continue;
+
+          Map<String, dynamic>? inserido;
+          try {
+            inserido = await supabase.from('clientes').insert({
+              'nome': nomeLimpo,
+              'responsavel': loc.responsavel,
+              'telefone': loc.telefone,
+              'cpf_cnpj': loc.documento,
+              'email': loc.email,
+              'endereco': loc.endereco,
+              'bairro': loc.bairro,
+              'cidade': loc.cidade,
+              'complemento': loc.complemento,
+            }).select().maybeSingle().timeout(const Duration(seconds: 6));
+          } catch (_) {
+            try {
+              inserido = await supabase.from('clientes').insert({
+                'nome': nomeLimpo,
+                'telefone': loc.telefone,
+                'cpf_cnpj': loc.documento,
+                'endereco': loc.enderecoCompleto,
+              }).select().maybeSingle().timeout(const Duration(seconds: 6));
+            } catch (_) {
+              try {
+                inserido = await supabase.from('clientes').insert({
+                  'nome': nomeLimpo,
+                  'telefone': loc.telefone,
+                  'endereco': loc.enderecoCompleto,
+                }).select().maybeSingle().timeout(const Duration(seconds: 6));
+              } catch (_) {}
+            }
+          }
+
+          if (inserido != null) {
+            if (inserido['id'] != null) {
+              loc.id = inserido['id'].toString();
+              atualizouId = true;
+            }
+            nomesBanco.add(nomeLimpo.toLowerCase());
+            sucessos++;
+          }
+        }
+        if (atualizouId) {
+          await salvarClientesLocal(locaisCli);
+        }
+      }
+    } catch (_) {}
+
+    // 🚀 2. SOBE A FILA DE SERVIÇOS OFFLINE
+    final fila = await obterFilaServicosOffline();
+    if (fila.isEmpty) return sucessos;
+    final List<Map<String, dynamic>> restantes = [];
+
+    for (var s in fila) {
+      try {
+        await supabase.from('servicos').insert(s).timeout(const Duration(seconds: 6));
+        sucessos++;
+      } catch (_) {
+        restantes.add(s);
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kFilaServicos, jsonEncode(restantes));
+    return sucessos;
+  }
+
   static Future<Map<String, String>?> obterSegurancaGestao() async {
     final prefs = await SharedPreferences.getInstance();
     final str = prefs.getString(_kSeguranca);
