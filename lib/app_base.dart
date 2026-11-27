@@ -489,25 +489,7 @@ class CacheOffline {
     await prefs.setString(_kFilaServicos, jsonEncode(fila));
   }
 
-  static Future<int> sincronizarFilaComNuvem() async {
-    final fila = await obterFilaServicosOffline();
-    if (fila.isEmpty) return 0;
-    int sucessos = 0;
-    final List<Map<String, dynamic>> restantes = [];
-
-    for (var s in fila) {
-      try {
-        await supabase.from('servicos').insert(s).timeout(const Duration(seconds: 6));
-        sucessos++;
-      } catch (_) {
-        restantes.add(s);
-      }
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kFilaServicos, jsonEncode(restantes));
-    return sucessos;
-  }
+  
 
   static Future<Map<String, String>?> obterSegurancaGestao() async {
     final prefs = await SharedPreferences.getInstance();

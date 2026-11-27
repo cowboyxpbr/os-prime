@@ -757,6 +757,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     final fC = TextEditingController(text: os.telefone);
     final eC = TextEditingController(text: os.endereco);
     final pC = TextEditingController(text: os.descricaoProblema);
+    final atendenteCtrl = TextEditingController(text: _extrairAtendente(os.descricaoProblema) ?? '');
 
     String prioridadeSel = os.prioridade.isNotEmpty ? os.prioridade : 'Normal';
     final tecnicosDisponiveis = _tecnicosDeCampo;

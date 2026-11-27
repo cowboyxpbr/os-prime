@@ -1,17 +1,13 @@
-import '../modulo_documentos.dart';
-import 'package:url_launcher/url_launcher.dart';
-// ============================================================================
-// ARQUIVO: TELA DE O.S. DO TÉCNICO COM 3 ABAS, HISTÓRICO E SUPORTE OFFLINE REAL
-// lib/screens/os_funcionario_page.dart
-// ============================================================================
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_base.dart';
 import '../models/os_model.dart';
 import '../modulo_cadastros.dart';
+import '../modulo_documentos.dart';
+import '../servico_licenca_bugs.dart';
 
 class TelaOSFuncionario extends StatefulWidget {
   final UsuarioApp usuarioLogado;
@@ -21,9 +17,37 @@ class TelaOSFuncionario extends StatefulWidget {
 }
 
 class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
+  late final Stream<List<Map<String, dynamic>>> _stream;
+  List<OrdemServico> _listaOffline = [];
   final Map<String, String> _mapaDocClientes = {};
+  final Set<String> _chavesOrcamentosExistentes = {};
+  String _abaSelecionada = 'Ativas';
+  bool _popupAberto = false;
+  final Set<String> _idsNotificadosNestaSessao = {};
 
-  Future<void> _carregarDocsSupabase() async {
+  @override
+  void initState() {
+    super.initState();
+    _carregarCacheLocal();
+    _carregarDocsEOrcamentos();
+    _iniciarStream();
+  }
+
+  void _iniciarStream() {
+    _stream = ServicoLicencaBugs.streamTabelaSegura('ordens_servico', orderBy: 'id', ascending: false);
+  }
+
+  Future<void> _carregarDocsEOrcamentos() async {
+    try {
+      final orcs = await ServicoOrcamentosSalvos.carregar();
+      for (final o in orcs) {
+        final nOS = (o['numero_os_origem'] ?? '').toString().trim().toLowerCase();
+        final nCli = (o['cliente_nome'] ?? '').toString().trim().toLowerCase();
+        if (nOS.isNotEmpty) _chavesOrcamentosExistentes.add(nOS);
+        if (nCli.isNotEmpty) _chavesOrcamentosExistentes.add(nCli);
+      }
+    } catch (_) {}
+
     try {
       final locais = await CacheOffline.carregarClientesLocal();
       for (final c in locais) {
@@ -38,6 +62,43 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
         if (n.isNotEmpty && d.isNotEmpty) _mapaDocClientes[n] = d;
       }
       if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _carregarCacheLocal() async {
+    try {
+      final locais = await ServicoOS.carregarLocal();
+      if (mounted && locais.isNotEmpty) {
+        setState(() {
+          _listaOffline = _filtrarParaMeuUsuario(locais);
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<OrdemServico> _filtrarParaMeuUsuario(List<OrdemServico> lista) {
+    final meuLogin = widget.usuarioLogado.usuario.trim().toLowerCase().replaceAll('@', '');
+    final meuNome = widget.usuarioLogado.nome.trim().toLowerCase();
+    final meuPrimeiroNome = meuNome.isNotEmpty ? meuNome.split(' ').first : '';
+
+    return lista.where((os) {
+      final tec = os.tecnicoDesignado.trim().toLowerCase().replaceAll('@', '');
+      if (tec.isEmpty) return false;
+      return tec == meuLogin || tec == meuNome || (meuPrimeiroNome.isNotEmpty && tec == meuPrimeiroNome);
+    }).toList();
+  }
+
+  Future<void> _abrirMapa(String endereco) async {
+    final limpo = endereco.trim();
+    if (limpo.isEmpty) return;
+    final query = Uri.encodeComponent(limpo);
+    final url = Uri.parse("https://www.google.com/maps/search/?api=1&query=$query");
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(url);
+      }
     } catch (_) {}
   }
 
@@ -94,66 +155,6 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
         ],
       ),
     );
-  }
-  late final Stream<List<Map<String, dynamic>>> _stream;
-  List<OrdemServico> _listaOffline = [];
-  String _abaSelecionada = 'Ativas'; // 'Ativas', 'Aguardando', 'Concluidas'
-  bool _popupAberto = false;
-  final Set<String> _idsNotificadosNestaSessao = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _carregarCacheLocal();
-    _carregarDocsSupabase();
-    _iniciarStream();
-  }
-
-  void _iniciarStream() {
-    try {
-      _stream = Supabase.instance.client
-          .from('ordens_servico')
-          .stream(primaryKey: ['id'])
-          .order('id', ascending: false);
-    } catch (_) {}
-  }
-
-  // 1. CARREGAMENTO OFFLINE IMEDIATO DO APARELHO
-  Future<void> _carregarCacheLocal() async {
-    try {
-      final locais = await ServicoOS.carregarLocal();
-      if (mounted && locais.isNotEmpty) {
-        setState(() {
-          _listaOffline = _filtrarParaMeuUsuario(locais);
-        });
-      }
-    } catch (_) {}
-  }
-
-  List<OrdemServico> _filtrarParaMeuUsuario(List<OrdemServico> lista) {
-    final meuLogin = widget.usuarioLogado.usuario.trim().toLowerCase().replaceAll('@', '');
-    final meuNome = widget.usuarioLogado.nome.trim().toLowerCase();
-    final meuPrimeiroNome = meuNome.isNotEmpty ? meuNome.split(' ').first : '';
-
-    return lista.where((os) {
-      final tec = os.tecnicoDesignado.trim().toLowerCase().replaceAll('@', '');
-      if (tec.isEmpty) return false;
-      return tec == meuLogin || tec == meuNome || (meuPrimeiroNome.isNotEmpty && tec == meuPrimeiroNome);
-    }).toList();
-  }
-
-  Future<void> _abrirMapa(String endereco) async {
-    final limpo = endereco.trim();
-    if (limpo.isEmpty) return;
-    final query = Uri.encodeComponent(limpo);
-    final url = Uri.parse("https://www.google.com/maps/search/?api=1&query=$query");
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        await launchUrl(url);
-      }
-    } catch (_) {}
   }
 
   Color _corPrioridade(String prioridade) {
@@ -419,32 +420,9 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                 minLines: 4,
                 maxLines: 7,
                 decoration: InputDecoration(
-                  labelText: paraOrcamento ? 'Laudo p/ Orçamento / Peças Necessárias *' : 'Relatório do Serviço / Peças Aplicadas *',
+                  labelText: paraOrcamento ? 'Laudo p/ Orçamento / Peças Necessárias *' : 'Relatório do Serviço / Observações *',
                   hintText: 'Descreva detalhadamente o serviço e materiais...',
                   alignLabelWithHint: true,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: (paraOrcamento ? Colors.amberAccent : corVerdeWhats).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: (paraOrcamento ? Colors.amberAccent : corVerdeWhats).withAlpha(90)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(paraOrcamento ? Icons.hourglass_top_rounded : Icons.assignment_turned_in, color: paraOrcamento ? Colors.amberAccent : corVerdeWhats, size: 16),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        paraOrcamento
-                            ? 'A O.S. irá para a aba "Aguardando Escritório" até o orçamento ser aprovado.'
-                            : 'A O.S. será concluída e enviada diretamente para o Faturamento do escritório.',
-                        style: TextStyle(color: paraOrcamento ? Colors.amberAccent : corVerdeWhats, fontSize: 10.5, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],
@@ -458,7 +436,7 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             ),
-            child: Text(paraOrcamento ? 'Enviar para Orçamento' : 'Finalizar O.S.', style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(paraOrcamento ? 'Confirmar Envio' : 'Confirmar Finalização', style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               final relatorio = relatorioC.text.trim();
               if (relatorio.isEmpty) {
@@ -474,8 +452,6 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                 equipamentos: os.equipamentos,
               );
 
-              // 🚀 Se finalizou direto, envia para Faturamento
-                            // 🚀 ENVIA DIRETO PARA O FATURAMENTO COM VALORES DO ORÇAMENTO (ANTI-DUPLICAÇÃO)
               if (!paraOrcamento) {
                 try {
                   double valorFinalFaturamento = 0.0;
@@ -484,7 +460,10 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                   try {
                     final orcsSalvos = await ServicoOrcamentosSalvos.carregar();
                     for (final o in orcsSalvos) {
-                      if ((o['numero_os_origem'] ?? '').toString().trim() == os.numeroOS.trim()) {
+                      final nOrig = (o['numero_os_origem'] ?? '').toString().trim().toLowerCase();
+                      final cOrig = (o['cliente_nome'] ?? '').toString().trim().toLowerCase();
+                      if ((nOrig.isNotEmpty && nOrig == os.numeroOS.trim().toLowerCase()) ||
+                          (cOrig.isNotEmpty && cOrig == os.cliente.trim().toLowerCase())) {
                         if (o['valor_total'] is num) {
                           valorFinalFaturamento = (o['valor_total'] as num).toDouble();
                         }
@@ -529,7 +508,7 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   backgroundColor: Colors.green,
-                  content: Text(paraOrcamento ? '📋 O.S. enviada para orçamento do escritório!' : '✅ O.S. Concluída com sucesso!'),
+                  content: Text(paraOrcamento ? '📋 O.S. enviada para orçamento do escritório!' : '✅ O.S. Concluída e enviada ao Faturamento!'),
                 ));
               }
             },
@@ -563,10 +542,6 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
               },
             ),
           ),
-
-          // ==================================================================
-          // 3 ABAS SEPARADAS: ATIVAS, AGUARDANDO ESCRITÓRIO E CONCLUÍDAS
-          // ==================================================================
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
             child: Row(
@@ -579,7 +554,6 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
               ],
             ),
           ),
-
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _stream,
@@ -589,16 +563,13 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                 if (snap.hasData && snap.data!.isNotEmpty) {
                   final todos = snap.data!.map((m) => OrdemServico.fromMap(m)).toList();
                   listaBase = _filtrarParaMeuUsuario(todos);
-                  // Atualiza o cache local offline em segundo plano
                   ServicoOS.salvarLocal(todos);
                 } else {
-                  // Fallback offline instantaneo
                   listaBase = _listaOffline;
                 }
 
                 _verificarNovasOS(listaBase);
 
-                // FILTRA EXATAMENTE PELA ABA SELECIONADA
                 final filtradas = listaBase.where((os) {
                   final st = os.status.trim().toLowerCase();
                   if (_abaSelecionada == 'Ativas') {
@@ -639,27 +610,254 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                     if (pendente) {
                       statusRotulo = 'Pendente';
                       corStatus = Colors.amberAccent;
-                    } else                             if (emAndamento)
-                              Builder(builder: (ctx) {
-                                final bool jaVemDeOrcamento = os.descricaoProblema.contains('[ORÇAMENTO') || os.descricaoProblema.contains('AUTORIZADO');
-                                if (jaVemDeOrcamento) {
-                                  return SizedBox(
-                                    width: double.infinity,
-                                    height: 40,
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(backgroundColor: corVerdeWhats, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                                      icon: const Icon(Icons.check_circle, size: 16),
-                                      label: const Text('Finalizar O.S.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                      onPressed: () => _confirmarAcaoComModal(
-                                        titulo: 'Finalizar O.S.?',
-                                        mensagem: 'Deseja finalizar o atendimento de ${os.cliente} e enviar ao escritório?',
-                                        corAcao: corVerdeWhats,
-                                        onConfirmar: () => _modalFinalizarOS(os, paraOrcamento: false),
-                                      ),
+                    } else if (emAndamento) {
+                      statusRotulo = 'Em Andamento';
+                      corStatus = corCianoEletrico;
+                    } else if (aguardandoOrcamento) {
+                      statusRotulo = 'Aguardando Orçamento';
+                      corStatus = Colors.orangeAccent;
+                    } else if (concluidaEscritorio) {
+                      statusRotulo = 'Aguardando Faturamento';
+                      corStatus = Colors.orangeAccent;
+                    } else {
+                      statusRotulo = 'Faturada';
+                      corStatus = corVerdeWhats;
+                    }
+
+                    final atend = _extrairAtendente(os.descricaoProblema);
+                    final foneAtend = _extrairFoneAtendente(os.descricaoProblema);
+
+                    // Verifica se esta O.S. (nova ou já cadastrada) já passou por orçamento ou retorno
+                    final descUpper = os.descricaoProblema.toUpperCase();
+                    final obsUpper = (os.observacaoTecnico ?? '').toUpperCase();
+                    final bool jaTemOrcamentoOuRetorno =
+                        descUpper.contains('ORÇAMENTO') ||
+                        descUpper.contains('ORCAMENTO') ||
+                        descUpper.contains('AUTORIZADO') ||
+                        descUpper.contains('ITENS A EXECUTAR') ||
+                        descUpper.contains('RETORNO') ||
+                        descUpper.contains('GARANTIA') ||
+                        obsUpper.isNotEmpty ||
+                        _chavesOrcamentosExistentes.contains(os.numeroOS.trim().toLowerCase()) ||
+                        _chavesOrcamentosExistentes.contains(os.cliente.trim().toLowerCase());
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: pendente
+                              ? _corPrioridade(os.prioridade).withAlpha(120)
+                              : (emAndamento ? corCianoEletrico.withAlpha(90) : Colors.white12),
+                          width: pendente ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _corPrioridade(os.prioridade).withAlpha(40),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: _corPrioridade(os.prioridade)),
+                                  ),
+                                  child: Text("${os.numeroOS} • ${os.prioridade.toUpperCase()}", style: TextStyle(color: _corPrioridade(os.prioridade), fontWeight: FontWeight.bold, fontSize: 10.5)),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: corStatus.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: corStatus.withOpacity(0.5)),
+                                  ),
+                                  child: Text(
+                                    statusRotulo,
+                                    style: TextStyle(color: corStatus, fontWeight: FontWeight.bold, fontSize: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: corTextoClaro)),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1, bottom: 2),
+                              child: Text(
+                                "📄 CPF/CNPJ: ${_mapaDocClientes[os.cliente.trim().toLowerCase()] ?? 'Não informado'}",
+                                style: const TextStyle(fontSize: 11, color: corTextoClaro, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            if (atend != null)
+                              Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amberAccent.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.person_pin_circle_rounded, size: 16, color: Colors.amberAccent),
+                                    const SizedBox(width: 5),
+                                    Expanded(
+                                      child: Text("Receber no Local: $atend", style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
                                     ),
-                                  );
-                                }
-                                return Row(
+                                    if (foneAtend != null)
+                                      ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: corVerdeWhats,
+                                          foregroundColor: Colors.white,
+                                          visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        ),
+                                        icon: const Icon(Icons.chat, size: 12),
+                                        label: const Text('WhatsApp', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                        onPressed: () => _abrirWhatsAtendente(foneAtend, os.numeroOS),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            if (os.endereco.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                child: InkWell(
+                                  onTap: () => _abrirMapa(os.endereco),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: corCianoEletrico.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: corCianoEletrico.withOpacity(0.3), width: 0.8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.navigation_rounded, size: 13, color: corCianoEletrico),
+                                        const SizedBox(width: 5),
+                                        Expanded(
+                                          child: Text(
+                                            "📍 ${os.endereco}",
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 11, color: corCianoSuave, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: corCianoEletrico,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.directions_car_rounded, size: 11, color: Colors.black),
+                                              SizedBox(width: 3),
+                                              Text('GPS', style: TextStyle(color: Colors.black, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                            const SizedBox(height: 6),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(6)),
+                              child: Text(os.descricaoProblema, style: const TextStyle(fontSize: 12, color: corTextoClaro)),
+                            ),
+                            if (os.observacaoTecnico != null && os.observacaoTecnico!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(color: const Color(0x2625D366), borderRadius: BorderRadius.circular(6), border: Border.all(color: corVerdeWhats.withAlpha(90))),
+                                child: Text("Relatório Técnico: ${os.observacaoTecnico}", style: const TextStyle(fontSize: 11, color: corVerdeWhats)),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+
+                            if (pendente)
+                              SizedBox(
+                                width: double.infinity,
+                                height: 38,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                  icon: const Icon(Icons.play_arrow, size: 16),
+                                  label: const Text('Iniciar Atendimento', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  onPressed: () => ServicoOS.atualizarStatus(id: os.id, novoStatus: 'Em Andamento'),
+                                ),
+                              ),
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text("Equipamentos vinculados (${os.equipamentos.length}):", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: corCianoEletrico)),
+                                if (pendente || emAndamento)
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: corCianoEletrico,
+                                      foregroundColor: Colors.black,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    ),
+                                    icon: const Icon(Icons.add, size: 13),
+                                    label: const Text('+ Equipamento', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _modalAdicionarEquipamento(os),
+                                  ),
+                              ],
+                            ),
+                            if (os.equipamentos.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                children: os.equipamentos.map((eq) => Chip(
+                                  backgroundColor: corCardFundo,
+                                  side: const BorderSide(color: corCianoSuave, width: 0.8),
+                                  label: Text("${eq.tipo} - ${eq.marca}", style: const TextStyle(fontSize: 10, color: corTextoClaro)),
+                                  deleteIcon: (pendente || emAndamento) ? const Icon(Icons.close, size: 12, color: Colors.redAccent) : null,
+                                  onDeleted: (pendente || emAndamento) ? () async {
+                                    setState(() {
+                                      os.equipamentos.remove(eq);
+                                    });
+                                    await ServicoOS.atualizarStatus(id: os.id, novoStatus: os.status, equipamentos: os.equipamentos);
+                                  } : null,
+                                )).toList(),
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+
+                            // SE EM ANDAMENTO: OCULTA 'ENVIAR P/ ORÇAMENTO' SE JÁ TIVER ORÇAMENTO OU RETORNO!
+                            if (emAndamento)
+                              if (jaTemOrcamentoOuRetorno)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 40,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(backgroundColor: corVerdeWhats, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                                    icon: const Icon(Icons.check_circle, size: 16),
+                                    label: const Text('Finalizar O.S.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _confirmarAcaoComModal(
+                                      titulo: 'Finalizar O.S.?',
+                                      mensagem: 'Deseja finalizar o atendimento de ${os.cliente} e enviar ao escritório?',
+                                      corAcao: corVerdeWhats,
+                                      onConfirmar: () => _modalFinalizarOS(os, paraOrcamento: false),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Row(
                                   children: [
                                     Expanded(
                                       child: SizedBox(
@@ -707,10 +905,8 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
                                       ),
                                     ),
                                   ],
-                                );
-                              }),
+                                ),
 
-                            // CASO 3: SE ESTIVER NO ESCRITÓRIO OU CONCLUÍDA -> PERMITE EDITAR RELATÓRIO
                             if (concluidaEscritorio || aguardandoOrcamento)
                               Align(
                                 alignment: Alignment.centerRight,
