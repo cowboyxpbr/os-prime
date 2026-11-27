@@ -246,7 +246,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                     const SizedBox(height: 10),
                     const Divider(color: Colors.white24),
                     const Text('1. MARQUE AS PEÇAS/SERVIÇOS QUE O TÉCNICO IRÁ VER:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
-                    const Text('🔒 Valores em R$ são suprimidos do celular do técnico.', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    const Text('🔒 Valores em R\$ são suprimidos do celular do técnico.', style: TextStyle(color: Colors.grey, fontSize: 10)),
                     const SizedBox(height: 6),
                     if (todosItens.isEmpty)
                       const Text('Nenhum item específico listado.', style: TextStyle(color: Colors.grey, fontSize: 11))
