@@ -262,9 +262,19 @@ class _TelaClientesState extends State<TelaClientes> {
                           dense: true,
                           leading: const CircleAvatar(radius: 16, backgroundColor: Color(0xFF0F354A), child: Icon(Icons.person, color: corCianoEletrico, size: 16)),
                           title: Text(c.nome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corTextoClaro)),
-                          subtitle: Text(
-                            "📞 ${c.telefone.isNotEmpty ? c.telefone : 'Sem telefone'}\n📍 ${c.enderecoCompleto.isNotEmpty ? c.enderecoCompleto : 'Sem endereço'}",
-                            style: const TextStyle(color: corCianoSuave, fontSize: 10),
+                                                    subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 2),
+                              Text(
+                                "📄 CPF/CNPJ: ${c.documento.trim().isNotEmpty ? c.documento.trim() : 'Não informado'}",
+                                style: const TextStyle(color: corTextoClaro, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 2),
+                              Text("📞 ${c.telefone.isNotEmpty ? c.telefone : 'Sem telefone'}", style: const TextStyle(color: corCianoSuave, fontSize: 10.5)),
+                              if (c.enderecoCompleto.isNotEmpty)
+                                Text("📍 ${c.enderecoCompleto}", style: const TextStyle(color: Colors.grey, fontSize: 10.5)),
+                            ],
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,

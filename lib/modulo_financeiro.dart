@@ -657,9 +657,17 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   }
                 }
 
-                final listaFiltrada = todos.where((s) {
-                  final statusOk = (s['status'] ?? 'Pendente') == _aba;
-                  if (!statusOk) return false;
+                                final listaFiltrada = todos.where((s) {
+                  final st = (s['status'] ?? 'Pendente').toString().trim();
+                  final bool isQuitado = st == 'Faturado' || st == 'Quitado';
+
+                  // Na aba Pendente mostra TUDO que ainda nao foi quitado
+                  if (_aba == 'Pendente') {
+                    if (isQuitado) return false;
+                  } else {
+                    if (!isQuitado) return false;
+                  }
+
                   if (_filtroPesquisa.isEmpty) return true;
                   final c = (s['cliente'] ?? '').toString().toLowerCase();
                   final d = (s['descricao'] ?? '').toString().toLowerCase();

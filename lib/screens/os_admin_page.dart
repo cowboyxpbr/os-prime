@@ -18,6 +18,32 @@ class TelaOSAdmin extends StatefulWidget {
 }
 
 class _TelaOSAdminState extends State<TelaOSAdmin> {
+  List<DadosCliente> _listaClientesCache = [];
+  Future<void> _carregarClientesCache() async {
+    try {
+      final locais = await CacheOffline.carregarClientesLocal();
+      if (mounted) setState(() => _listaClientesCache = locais);
+      final res = await supabase.from('clientes').select().timeout(const Duration(seconds: 10));
+      if (res.isNotEmpty) {
+        final remotos = (res as List).map((m) => DadosCliente.fromMap(Map<String, dynamic>.from(m))).toList();
+        if (mounted) setState(() => _listaClientesCache = remotos);
+      }
+    } catch (_) {}
+  }
+
+  String _buscarDocCliente(String nomeCliente) {
+    if (nomeCliente.trim().isEmpty) return 'Não informado';
+    final n = nomeCliente.trim().toLowerCase();
+    try {
+      final cli = _listaClientesCache.where((c) =>
+        c.nome.trim().toLowerCase() == n ||
+        n.contains(c.nome.trim().toLowerCase()) ||
+        c.nome.trim().toLowerCase().contains(n)
+      ).firstOrNull;
+      if (cli != null && cli.documento.trim().isNotEmpty) return cli.documento.trim();
+    } catch (_) {}
+    return 'Não informado';
+  }
   late final Stream<List<Map<String, dynamic>>> _stream;
   List<OrdemServico> _offlineOS = [];
   List<UsuarioApp> _tecnicos = [];
@@ -48,6 +74,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     } catch (_) {
       _tecnicos = await CacheOffline.carregarUsuariosLocais();
     }
+    _carregarClientesCache();
     if (mounted) {
       setState(() => _offlineOS = locais);
     }
