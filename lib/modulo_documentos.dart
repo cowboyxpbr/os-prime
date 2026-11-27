@@ -104,6 +104,9 @@ class ServicoOrcamentosSalvos {
 // ============================================================================
 // 2. TELA DE HISTÓRICO COM ABAS "EM ABERTO" E "ORÇ. APROVADOS" (SEM FATURAMENTO)
 // ============================================================================
+// ============================================================================
+// 2. TELA DE HISTÓRICO COM 3 ABAS: AGUARDANDO ORÇAMENTO, EM ABERTO E APROVADOS
+// ============================================================================
 class TelaListaOrcamentosSalvos extends StatefulWidget {
   const TelaListaOrcamentosSalvos({super.key});
 
@@ -113,8 +116,9 @@ class TelaListaOrcamentosSalvos extends StatefulWidget {
 
 class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   List<Map<String, dynamic>> _lista = [];
+  List<Map<String, dynamic>> _osAguardandoOrcamento = [];
   List<String> _tecnicosDisponiveis = [];
-  String _abaOrcamentos = 'Aberto'; // 'Aberto' ou 'Aprovado'
+  String _abaOrcamentos = 'AguardandoOS'; // 'AguardandoOS', 'Aberto', 'Aprovado'
   String _filtro = '';
   bool _carregando = true;
 
@@ -128,9 +132,24 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   Future<void> _iniciar() async {
     await ServicoOrcamentosSalvos.limparAntigos90Dias();
     final orcs = await ServicoOrcamentosSalvos.carregar();
+
+    // Carrega O.S. que os técnicos enviaram para orçamento da rua
+    List<Map<String, dynamic>> listaOS = [];
+    try {
+      final res = await supabase
+          .from('ordens_servico')
+          .select()
+          .order('id', ascending: false)
+          .timeout(const Duration(seconds: 10));
+      listaOS = List<Map<String, dynamic>>.from(res)
+          .where((s) => (s['status'] ?? '').toString().trim().toLowerCase() == 'aguardando orçamento')
+          .toList();
+    } catch (_) {}
+
     if (mounted) {
       setState(() {
         _lista = orcs;
+        _osAguardandoOrcamento = listaOS;
         _carregando = false;
       });
     }
@@ -156,7 +175,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     if (_tecnicosDisponiveis.isEmpty) _tecnicosDisponiveis = ['Técnico Responsável'];
   }
 
-  // 1. APROVAÇÃO DIRETA (SEM DESPACHAR PARA FATURAMENTO)
   Future<void> _aprovarOrcamentoSemFaturamento(Map<String, dynamic> orc) async {
     orc['status'] = 'Aprovado';
     await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
@@ -166,19 +184,33 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: corVerdeWhats,
-          content: Text('✅ Orçamento marcado como APROVADO! Agora disponível na aba "Orç. Aprovados".'),
+          content: Text('✅ Orçamento marcado como APROVADO! Disponível na aba "Orç. Aprovados".'),
         ),
       );
     }
   }
 
-  // 2. ENCAMINHAR ORÇAMENTO APROVADO COMO ORDEM DE SERVIÇO (O.S.)
-  void _modalEncaminharComoOS(Map<String, dynamic> orc) async {
+  // ==========================================================================
+  // DEVOLVER A MESMA O.S. AO TÉCNICO COM ITENS SELECIONÁVEIS E VALORES SUPRIMIDOS
+  // ==========================================================================
+  void _modalDevolverOSComItens(Map<String, dynamic> orc) async {
+    final String numOS = (orc['numero_os_origem'] != null && orc['numero_os_origem'].toString().trim().isNotEmpty)
+        ? orc['numero_os_origem'].toString().trim()
+        : (orc['id_os_origem'] != null ? "OS-${orc['id_os_origem']}" : "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}");
+
     String? tecnicoSel = _tecnicosDisponiveis.isNotEmpty ? _tecnicosDisponiveis.first : 'Técnico';
     String prioridadeSel = 'Normal';
     DateTime dataExecucao = DateTime.now();
     TimeOfDay horaExecucao = const TimeOfDay(hour: 8, minute: 0);
-    bool gerandoOS = false;
+
+    // Extrai os itens do orçamento (suprimindo valores em R$ para o técnico)
+    final num valTotal = orc['valor_total'] is num ? orc['valor_total'] : 0.0;
+    final List<ItemServico> todosItens = (orc['itens_lista'] != null && orc['itens_lista'] is List)
+        ? (orc['itens_lista'] as List).map((e) => ItemServico.fromMap(Map<String, dynamic>.from(e))).toList()
+        : _converterDescricaoEmItens(orc['descricao_itens'] ?? '', valTotal);
+
+    final Set<int> itensSelecionados = Set.from(List.generate(todosItens.length, (i) => i));
+    bool despachando = false;
 
     showDialog(
       context: context,
@@ -192,126 +224,152 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
               borderRadius: BorderRadius.circular(16),
               side: const BorderSide(color: Colors.amberAccent, width: 1.5),
             ),
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.assignment_turned_in_rounded, color: Colors.amberAccent, size: 22),
-                SizedBox(width: 8),
+                const Icon(Icons.assignment_turned_in_rounded, color: Colors.amberAccent, size: 22),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Encaminhar como O.S.', style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text('Devolver $numOS ao Técnico', style: const TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Cliente: ${orc['cliente_nome'] ?? 'Cliente'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: corTextoClaro)),
-                  if (orc['cliente_endereco'] != null && orc['cliente_endereco'].toString().isNotEmpty)
-                    Text("📍 ${orc['cliente_endereco']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                  const SizedBox(height: 12),
-                  const Text('1. SELECIONE O PRESTADOR / TÉCNICO:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  DropdownButtonFormField<String>(
-                    value: tecnicoSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                    items: _tecnicosDisponiveis.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12.5)))).toList(),
-                    onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('2. DATA E HORA DE EXECUÇÃO:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () async {
-                      final pData = await showDatePicker(
-                        context: context,
-                        initialDate: dataExecucao,
-                        firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                        lastDate: DateTime(2035),
-                        builder: (c, w) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: corCianoEletrico, onPrimary: Colors.black, surface: corCardFundo)), child: w!),
-                      );
-                      if (pData != null && ctx.mounted) {
-                        final pHora = await showTimePicker(
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Cliente: ${orc['cliente_nome'] ?? 'Cliente'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corTextoClaro)),
+                    if (orc['cliente_endereco'] != null && orc['cliente_endereco'].toString().isNotEmpty)
+                      Text("📍 ${orc['cliente_endereco']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    const SizedBox(height: 10),
+                    const Divider(color: Colors.white24),
+                    const Text('1. MARQUE AS PEÇAS/SERVIÇOS QUE O TÉCNICO IRÁ VER:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const Text('🔒 Valores em R$ são suprimidos do celular do técnico.', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    const SizedBox(height: 6),
+                    if (todosItens.isEmpty)
+                      const Text('Nenhum item específico listado.', style: TextStyle(color: Colors.grey, fontSize: 11))
+                    else
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 160),
+                        decoration: BoxDecoration(color: const Color(0xFF142030), borderRadius: BorderRadius.circular(8)),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: todosItens.length,
+                          itemBuilder: (_, idx) {
+                            final it = todosItens[idx];
+                            final checked = itensSelecionados.contains(idx);
+                            final qStr = (it.quantidade % 1 == 0) ? it.quantidade.toInt().toString() : it.quantidade.toString();
+                            return CheckboxListTile(
+                              dense: true,
+                              activeColor: corCianoEletrico,
+                              checkColor: Colors.black,
+                              value: checked,
+                              title: Text("$qStr" "x ${it.descricao}", style: const TextStyle(fontSize: 12, color: corTextoClaro)),
+                              onChanged: (v) => setD(() {
+                                if (v == true) {
+                                  itensSelecionados.add(idx);
+                                } else {
+                                  itensSelecionados.remove(idx);
+                                }
+                              }),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    const Text('2. SELECIONE O TÉCNICO DE CAMPO:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: tecnicoSel,
+                      dropdownColor: corCardFundo,
+                      decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                      items: _tecnicosDisponiveis.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12.5)))).toList(),
+                      onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('3. DATA E HORA DE EXECUÇÃO:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    InkWell(
+                      onTap: () async {
+                        final pData = await showDatePicker(
                           context: context,
-                          initialTime: horaExecucao,
+                          initialDate: dataExecucao,
+                          firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                          lastDate: DateTime(2035),
                           builder: (c, w) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: corCianoEletrico, onPrimary: Colors.black, surface: corCardFundo)), child: w!),
                         );
-                        if (pHora != null) {
-                          setD(() {
-                            dataExecucao = pData;
-                            horaExecucao = pHora;
-                          });
+                        if (pData != null && ctx.mounted) {
+                          final pHora = await showTimePicker(
+                            context: context,
+                            initialTime: horaExecucao,
+                            builder: (c, w) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: corCianoEletrico, onPrimary: Colors.black, surface: corCardFundo)), child: w!),
+                          );
+                          if (pHora != null) {
+                            setD(() {
+                              dataExecucao = pData;
+                              horaExecucao = pHora;
+                            });
+                          }
                         }
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF142030),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_month, color: Colors.amberAccent, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(dataHoraFmt, style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                          const Text('Alterar', style: TextStyle(color: corCianoSuave, fontSize: 10.5)),
-                        ],
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(color: const Color(0xFF142030), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amberAccent.withOpacity(0.6))),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_month, color: Colors.amberAccent, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(dataHoraFmt, style: const TextStyle(color: Colors.amberAccent, fontSize: 11.5, fontWeight: FontWeight.bold))),
+                            const Text('Alterar', style: TextStyle(color: corCianoSuave, fontSize: 10)),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('3. PRIORIDADE DA O.S.:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  DropdownButtonFormField<String>(
-                    value: prioridadeSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                    items: const [
-                      DropdownMenuItem(value: 'Normal', child: Text('Normal (Padrão)')),
-                      DropdownMenuItem(value: 'Urgente', child: Text('Urgente', style: TextStyle(color: Colors.orangeAccent))),
-                      DropdownMenuItem(value: 'Emergência', child: Text('Emergência Imediata', style: TextStyle(color: Colors.redAccent))),
-                      DropdownMenuItem(value: 'Plantão', child: Text('🚨 Plantão Especial', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
-                    ],
-                    onChanged: (v) => setD(() => prioridadeSel = v ?? 'Normal'),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    const Text('4. PRIORIDADE DA O.S.:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: prioridadeSel,
+                      dropdownColor: corCardFundo,
+                      decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                      items: const [
+                        DropdownMenuItem(value: 'Normal', child: Text('Normal (Padrão)')),
+                        DropdownMenuItem(value: 'Urgente', child: Text('Urgente', style: TextStyle(color: Colors.orangeAccent))),
+                        DropdownMenuItem(value: 'Emergência', child: Text('Emergência Imediata', style: TextStyle(color: Colors.redAccent))),
+                        DropdownMenuItem(value: 'Plantão', child: Text('🚨 Plantão Especial', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
+                      ],
+                      onChanged: (v) => setD(() => prioridadeSel = v ?? 'Normal'),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: corVerdeWhats, foregroundColor: Colors.white),
-                icon: gerandoOS
+                icon: despachando
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.send_rounded, size: 16),
-                label: const Text('Gerar e Despachar O.S.', style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: gerandoOS
+                    : const Icon(Icons.send_rounded, size: 15),
+                label: const Text('Devolver O.S. ao Técnico', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                onPressed: despachando
                     ? null
                     : () async {
-                                                setD(() => gerandoOS = true);
-                        final numOS = "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}";
+                        setD(() => despachando = true);
 
-                        // Formata equipamentos na descricao para o tecnico ver na O.S. sem dar erro no banco
-                        String equipamentosTxt = '';
-                        if (orc['equipamentos'] != null && orc['equipamentos'] is List) {
-                          final listaEq = (orc['equipamentos'] as List);
-                          if (listaEq.isNotEmpty) {
-                            final nomes = listaEq.map((e) => "${e['tipo']} ${e['marca']} ${e['modelo']}".trim()).where((s) => s.isNotEmpty).join(', ');
-                            if (nomes.isNotEmpty) {
-                              equipamentosTxt = "\n[Equipamentos: $nomes]";
-                            }
-                          }
-                        }
+                        // Monta o texto de itens autorizados SEM valores para o técnico
+                        final itensAutorizadosTexto = itensSelecionados.map((idx) {
+                          final it = todosItens[idx];
+                          final qStr = (it.quantidade % 1 == 0) ? it.quantidade.toInt().toString() : it.quantidade.toString();
+                          return "• $qStr" "x ${it.descricao}";
+                        }).join("\n");
 
-                        final descOS = "[ORÇAMENTO APROVADO] ${orc['descricao_itens'] ?? ''}\n${orc['laudo_descritivo'] ?? ''}$equipamentosTxt".trim();
+                        final descOS = "[ORÇAMENTO AUTORIZADO - $numOS]\nItens a executar:\n$itensAutorizadosTexto\n\n${orc['laudo_descritivo'] ?? ''}".trim();
 
-                        final novaOS = {
+                        final dadosOS = {
                           'numero_os': numOS,
                           'cliente': orc['cliente_nome'] ?? 'Cliente',
                           'telefone': orc['cliente_telefone'] ?? '',
@@ -319,13 +377,22 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                           'descricao_problema': descOS,
                           'tecnico_designado': tecnicoSel,
                           'prioridade': prioridadeSel,
-                          'status': 'Pendente',
+                          'status': 'Em Andamento',
                           'data_abertura': "${DateFormat('dd/MM/yyyy').format(dataExecucao)} • ${horaExecucao.format(ctx)}",
                           'visualizado_pelo_tecnico': false,
                         };
 
                         try {
-                          await supabase.from('ordens_servico').insert(novaOS).timeout(const Duration(seconds: 10));
+                          // 🛡️ ANTI-DUPLICAÇÃO: Se já existia O.S., atualiza a mesma! Se não, insere.
+                          final checar = await supabase.from('ordens_servico').select('id').ilike('numero_os', numOS).maybeSingle();
+                          if (checar != null && checar['id'] != null) {
+                            await supabase.from('ordens_servico').update(dadosOS).eq('id', checar['id']);
+                          } else if (orc['id_os_origem'] != null) {
+                            await supabase.from('ordens_servico').update(dadosOS).eq('id', orc['id_os_origem']);
+                          } else {
+                            await supabase.from('ordens_servico').insert(dadosOS);
+                          }
+
                           ServicoNotificacaoOneSignal.enviarNotificacaoOS(
                             tecnicoLogin: tecnicoSel!,
                             numeroOS: numOS,
@@ -333,7 +400,8 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                             categoria: prioridadeSel,
                           );
 
-                          orc['status'] = "Aprovado - O.S. $numOS";
+                          orc['status'] = "Aprovado - Em Execução ($numOS)";
+                          orc['numero_os_origem'] = numOS;
                           await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
                           await _iniciar();
 
@@ -342,14 +410,14 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 backgroundColor: Colors.green,
-                                content: Text('🚀 $numOS gerada e despachada para $tecnicoSel com sucesso!'),
+                                content: Text('🚀 $numOS devolvida com sucesso para $tecnicoSel sem valores!'),
                               ),
                             );
                           }
                         } catch (e) {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao gerar O.S.: $e')));
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
                         } finally {
-                          if (ctx.mounted) setD(() => gerandoOS = false);
+                          if (ctx.mounted) setD(() => despachando = false);
                         }
                       },
               ),
@@ -396,75 +464,23 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     final abertos = _lista.where((o) => (o['status'] ?? '') != 'Aprovado' && !(o['status'] ?? '').toString().startsWith('Aprovado')).toList();
     final aprovados = _lista.where((o) => (o['status'] ?? '') == 'Aprovado' || (o['status'] ?? '').toString().startsWith('Aprovado')).toList();
 
-    final listaAtiva = _abaOrcamentos == 'Aberto' ? abertos : aprovados;
-
-    final filtrados = listaAtiva.where((o) {
-      if (_filtro.isEmpty) return true;
-      final f = _filtro.toLowerCase();
-      final c = (o['cliente_nome'] ?? '').toString().toLowerCase();
-      final d = (o['descricao_itens'] ?? '').toString().toLowerCase();
-      return c.contains(f) || d.contains(f);
-    }).toList();
-
     return Scaffold(
       body: Column(
         children: [
           const BannerOSPrime(subtituloTela: 'Orçamentos', exibirBotaoVoltar: true),
 
-          // SELETOR DAS 2 ABAS: EM ABERTO E ORÇ. APROVADOS
+          // ==================================================================
+          // 3 ABAS: 1. AGUARDANDO ORÇAMENTO (O.S.) | 2. EM ABERTO | 3. APROVADOS
+          // ==================================================================
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
             child: Row(
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _abaOrcamentos = 'Aberto'),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _abaOrcamentos == 'Aberto' ? Colors.amberAccent.withOpacity(0.2) : corCardFundo,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _abaOrcamentos == 'Aberto' ? Colors.amberAccent : Colors.white12, width: 1.2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "🟡 Aguardando (${abertos.length})",
-                          style: TextStyle(
-                            color: _abaOrcamentos == 'Aberto' ? Colors.amberAccent : Colors.grey,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _abaOrcamentos = 'Aprovado'),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _abaOrcamentos == 'Aprovado' ? corVerdeWhats.withOpacity(0.2) : corCardFundo,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _abaOrcamentos == 'Aprovado' ? corVerdeWhats : Colors.white12, width: 1.2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "🟢 Orç. Aprovados (${aprovados.length})",
-                          style: TextStyle(
-                            color: _abaOrcamentos == 'Aprovado' ? corVerdeWhats : Colors.grey,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                _botaoAbaOrcamento('AguardandoOS', "📋 O.S. (${_osAguardandoOrcamento.length})", Colors.orangeAccent),
+                const SizedBox(width: 6),
+                _botaoAbaOrcamento('Aberto', "🟡 Em Aberto (${abertos.length})", Colors.amberAccent),
+                const SizedBox(width: 6),
+                _botaoAbaOrcamento('Aprovado', "🟢 Aprovados (${aprovados.length})", corVerdeWhats),
               ],
             ),
           ),
@@ -473,7 +489,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: TextField(
               decoration: const InputDecoration(
-                hintText: 'Filtrar por cliente ou peça...',
+                hintText: 'Filtrar por cliente, O.S. ou peça...',
                 prefixIcon: Icon(Icons.search, color: corCianoEletrico, size: 18),
                 isDense: true,
               ),
@@ -484,153 +500,294 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
           Expanded(
             child: _carregando
                 ? const Center(child: CircularProgressIndicator(color: corCianoEletrico))
-                : filtrados.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            _abaOrcamentos == 'Aberto'
-                                ? 'Nenhum orçamento aguardando aprovação.'
-                                : 'Nenhum orçamento aprovado no momento.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: filtrados.length,
-                        itemBuilder: (_, i) {
-                          final orc = filtrados[i];
-                          final double total = (orc['valor_total'] is num) ? (orc['valor_total'] as num).toDouble() : 0.0;
-                          final status = (orc['status'] ?? 'Pendente').toString();
-                          final bool isAprovado = status.startsWith('Aprovado');
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: isAprovado ? corVerdeWhats.withAlpha(90) : Colors.amberAccent.withAlpha(80)),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: isAprovado ? const Color(0x2625D366) : const Color(0x26FFC107),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          isAprovado ? "🟢 $status".toUpperCase() : '🟡 AGUARDANDO CLIENTE',
-                                          style: TextStyle(
-                                            color: isAprovado ? corVerdeWhats : Colors.amberAccent,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      Text(orc['data'] ?? '', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(orc['cliente_nome'] ?? 'Cliente sem nome', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: corTextoClaro)),
-                                  if (orc['cliente_telefone'] != null && orc['cliente_telefone'].toString().isNotEmpty)
-                                    Text("📞 ${orc['cliente_telefone']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                  const SizedBox(height: 6),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(6)),
-                                    child: Text(orc['descricao_itens'] ?? '', style: const TextStyle(fontSize: 12, color: corTextoClaro)),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text('TOTAL:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: corTextoClaro)),
-                                      Text(moeda.format(total), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corCianoEletrico)),
-                                    ],
-                                  ),
-                                  const Divider(height: 14),
-
-                                  // BOTÕES DE AÇÃO CONFORME A ABA
-                                  Row(
-                                    children: [
-                                      OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          side: const BorderSide(color: corCianoEletrico),
-                                          foregroundColor: corCianoEletrico,
-                                          visualDensity: VisualDensity.compact,
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        ),
-                                        icon: const Icon(Icons.edit, size: 14),
-                                        label: const Text('Editar', style: TextStyle(fontSize: 11)),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => TelaEmissaoDoc(
-                                                tipoDoc: 'ORÇAMENTO',
-                                                orcamentoParaEditar: orc,
-                                              ),
-                                            ),
-                                          ).then((_) => _iniciar());
-                                        },
-                                      ),
-                                      const Spacer(),
-
-                                      // ABA 1 (EM ABERTO): BOTÃO APROVAR (SEM FATURAMENTO)
-                                      if (!isAprovado)
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: corVerdeWhats,
-                                            foregroundColor: Colors.white,
-                                            visualDensity: VisualDensity.compact,
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          ),
-                                          icon: const Icon(Icons.check_circle_outline, size: 15),
-                                          label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                          onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
-                                        ),
-
-                                      // ABA 2 (ORÇ. APROVADOS): BOTÃO ENCAMINHAR COMO O.S.
-                                      if (isAprovado)
-                                        ElevatedButton.icon(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.amberAccent,
-                                            foregroundColor: Colors.black,
-                                            visualDensity: VisualDensity.compact,
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          ),
-                                          icon: const Icon(Icons.assignment_ind_rounded, size: 15),
-                                          label: const Text('Encaminhar O.S.', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                          onPressed: () => _modalEncaminharComoOS(orc),
-                                        ),
-
-                                      const SizedBox(width: 4),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.delete, color: Colors.redAccent, size: 18),
-                                        tooltip: 'Excluir Orçamento',
-                                        onPressed: () => _confirmarExcluir(orc['id']),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                : _abaOrcamentos == 'AguardandoOS'
+                    ? _construirListaOSAguardando()
+                    : _construirListaOrcamentos(_abaOrcamentos == 'Aberto' ? abertos : aprovados, moeda),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _botaoAbaOrcamento(String id, String rotulo, Color cor) {
+    final sel = _abaOrcamentos == id;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _abaOrcamentos = id),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: sel ? cor.withOpacity(0.22) : corCardFundo,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: sel ? cor : Colors.white12, width: sel ? 1.4 : 1),
+          ),
+          child: Center(
+            child: Text(
+              rotulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: sel ? cor : Colors.grey,
+                fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                fontSize: 10.5,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _construirListaOSAguardando() {
+    final filtrados = _osAguardandoOrcamento.where((s) {
+      if (_filtro.isEmpty) return true;
+      final f = _filtro.toLowerCase();
+      final c = (s['cliente'] ?? '').toString().toLowerCase();
+      final n = (s['numero_os'] ?? '').toString().toLowerCase();
+      final p = (s['descricao_problema'] ?? '').toString().toLowerCase();
+      return c.contains(f) || n.contains(f) || p.contains(f);
+    }).toList();
+
+    if (filtrados.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Nenhuma O.S. aguardando orçamento no momento.\nQuando o técnico enviar da rua, ela aparecerá aqui!', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: filtrados.length,
+      itemBuilder: (_, i) {
+        final s = filtrados[i];
+        final numOS = s['numero_os'] ?? 'S/N';
+        final cliente = s['cliente'] ?? 'Cliente';
+        final laudo = (s['observacao_tecnico'] != null && s['observacao_tecnico'].toString().isNotEmpty)
+            ? s['observacao_tecnico'].toString()
+            : (s['descricao_problema'] ?? '');
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: Colors.orangeAccent, width: 1.2)),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("O.S. #$numOS", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orangeAccent, fontSize: 13)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.18), borderRadius: BorderRadius.circular(4)),
+                      child: const Text('AGUARDANDO ORÇAMENTO', style: TextStyle(color: Colors.orangeAccent, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: corTextoClaro)),
+                if (s['endereco'] != null && s['endereco'].toString().isNotEmpty)
+                  Text("📍 ${s['endereco']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text("👤 Técnico de Campo: ${s['tecnico_designado'] ?? 'Técnico'}", style: const TextStyle(fontSize: 11, color: corCianoSuave)),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(6)),
+                  child: Text("Laudo Técnico: $laudo", style: const TextStyle(fontSize: 11.5, color: corTextoClaro)),
+                ),
+                const Divider(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amberAccent,
+                      foregroundColor: Colors.black,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.receipt_long, size: 15),
+                    label: const Text('Criar Orçamento desta O.S.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TelaEmissaoDoc(
+                            tipoDoc: 'ORÇAMENTO',
+                            clienteInicial: DadosCliente(
+                              nome: cliente,
+                              telefone: s['telefone'] ?? '',
+                              endereco: s['endereco'] ?? '',
+                              documento: (s['cpf_cnpj'] ?? s['documento'] ?? '').toString(),
+                            ),
+                            orcamentoParaEditar: {
+                              'id_os_origem': s['id'],
+                              'numero_os_origem': numOS,
+                              'titulo_destaque': "ORÇAMENTO REF. O.S. Nº $numOS",
+                              'obs': laudo,
+                            },
+                          ),
+                        ),
+                      ).then((_) => _iniciar());
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _construirListaOrcamentos(List<Map<String, dynamic>> lista, NumberFormat moeda) {
+    final filtrados = lista.where((o) {
+      if (_filtro.isEmpty) return true;
+      final f = _filtro.toLowerCase();
+      final c = (o['cliente_nome'] ?? '').toString().toLowerCase();
+      final d = (o['descricao_itens'] ?? '').toString().toLowerCase();
+      return c.contains(f) || d.contains(f);
+    }).toList();
+
+    if (filtrados.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _abaOrcamentos == 'Aberto' ? 'Nenhum orçamento em aberto.' : 'Nenhum orçamento aprovado.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: filtrados.length,
+      itemBuilder: (_, i) {
+        final orc = filtrados[i];
+        final double total = (orc['valor_total'] is num) ? (orc['valor_total'] as num).toDouble() : 0.0;
+        final status = (orc['status'] ?? 'Pendente').toString();
+        final bool isAprovado = status.startsWith('Aprovado');
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: isAprovado ? corVerdeWhats.withAlpha(90) : Colors.amberAccent.withAlpha(80)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isAprovado ? const Color(0x2625D366) : const Color(0x26FFC107),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        isAprovado ? "🟢 $status".toUpperCase() : '🟡 AGUARDANDO CLIENTE',
+                        style: TextStyle(
+                          color: isAprovado ? corVerdeWhats : Colors.amberAccent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Text(orc['data'] ?? '', style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(orc['cliente_nome'] ?? 'Cliente sem nome', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: corTextoClaro)),
+                if (orc['cliente_telefone'] != null && orc['cliente_telefone'].toString().isNotEmpty)
+                  Text("📞 ${orc['cliente_telefone']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(6)),
+                  child: Text(orc['descricao_itens'] ?? '', style: const TextStyle(fontSize: 12, color: corTextoClaro)),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('TOTAL:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: corTextoClaro)),
+                    Text(moeda.format(total), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corCianoEletrico)),
+                  ],
+                ),
+                const Divider(height: 14),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: corCianoEletrico),
+                        foregroundColor: corCianoEletrico,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                      icon: const Icon(Icons.edit, size: 14),
+                      label: const Text('Editar', style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TelaEmissaoDoc(
+                              tipoDoc: 'ORÇAMENTO',
+                              orcamentoParaEditar: orc,
+                            ),
+                          ),
+                        ).then((_) => _iniciar());
+                      },
+                    ),
+                    const Spacer(),
+                    if (!isAprovado)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: corVerdeWhats,
+                          foregroundColor: Colors.white,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline, size: 15),
+                        label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
+                      ),
+                    if (isAprovado)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amberAccent,
+                          foregroundColor: Colors.black,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        icon: const Icon(Icons.assignment_ind_rounded, size: 15),
+                        label: const Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () => _modalDevolverOSComItens(orc),
+                      ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.delete, color: Colors.redAccent, size: 18),
+                      tooltip: 'Excluir Orçamento',
+                      onPressed: () => _confirmarExcluir(orc['id']),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

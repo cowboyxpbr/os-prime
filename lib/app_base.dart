@@ -1465,7 +1465,7 @@ class PdfEngine {
                     child: pw.ClipRRect(
                       horizontalRadius: 6,
                       verticalRadius: 6,
-                      child: pw.Image(imagemPdf, fit: pw.BoxFit.cover),
+                      child: pw.Image(imagemPdf, fit: pw.BoxFit.contain),
                     ),
                   ),
                   pw.SizedBox(height: 4),
