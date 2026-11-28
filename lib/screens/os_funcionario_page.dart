@@ -222,8 +222,52 @@ class _TelaOSFuncionarioState extends State<TelaOSFuncionario> {
             ),
             const SizedBox(height: 8),
             Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: corTextoClaro)),
-            if (os.endereco.isNotEmpty) Text("📍 ${os.endereco}", style: const TextStyle(fontSize: 12, color: corCianoSuave)),
-            if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                        if (os.endereco.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                child: InkWell(
+                                  onTap: () => _abrirMapa(os.endereco),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: corCianoEletrico.withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: corCianoEletrico.withOpacity(0.35), width: 0.8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.navigation_rounded, size: 14, color: corCianoEletrico),
+                                        const SizedBox(width: 5),
+                                        Expanded(
+                                          child: Text(
+                                            "📍 ${os.endereco}",
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 11.5, color: corCianoSuave, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                          decoration: BoxDecoration(
+                                            color: corCianoEletrico,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.directions_car_rounded, size: 11, color: Colors.black),
+                                              SizedBox(width: 3),
+                                              Text('GPS', style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
             const SizedBox(height: 8),
             const Text("Serviço a executar:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
             const SizedBox(height: 4),

@@ -1,3 +1,8 @@
+// ============================================================================
+// ARQUIVO: FATURAMENTO NA NUVEM, PRECIFICAÇÃO EM TELA CHEIA E RELATÓRIOS
+// lib/modulo_financeiro.dart
+// ============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -38,7 +43,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     final fmt = DateFormat('dd/MM/yyyy');
     for (var s in lista) {
       final id = s['id'];
-      if (id != null && !_processadosLimpeza.contains(id) && s['status'] == 'Faturado' && s['data'] != null) {
+      if (id != null && !_processadosLimpeza.contains(id) && (s['status'] == 'Faturado' || s['status'] == 'Quitado') && s['data'] != null) {
         _processadosLimpeza.add(id);
         try {
           if (hoje.difference(fmt.parse(s['data'].toString())).inDays >= 20) {
@@ -146,22 +151,45 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     );
   }
 
-  void _modalDevolverOS(Map<String, dynamic> servico) {
+  // ==========================================================================
+  // VOLTAR O.S. (LIBERADO PARA SPAZIO, ATLANTIC E QUALQUER SERVIÇO PENDENTE)
+  // ==========================================================================
+  void _modalDevolverOS(Map<String, dynamic> servico) async {
     final desc = (servico['descricao'] ?? '').toString();
     final regexOS = RegExp(r'\[(OS-[^\]]+|O\.S\.[^\]]+)\]', caseSensitive: false);
     final match = regexOS.firstMatch(desc);
-    final numOS = match != null ? match.group(1) : null;
+    String numOS = match != null ? match.group(1)! : "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}";
+
+    List<String> tecnicosDisponiveis = [];
+    try {
+      final res = await supabase.from('usuarios').select('nome, usuario, cargo').order('nome');
+      tecnicosDisponiveis = (res as List)
+          .map((u) => (u['nome'] ?? u['usuario'] ?? '').toString().trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+    } catch (_) {}
+    if (tecnicosDisponiveis.isEmpty) tecnicosDisponiveis = ['Técnico de Campo'];
+
+    String tecnicoPadrao = (servico['tecnico'] != null && servico['tecnico'].toString().trim().isNotEmpty)
+        ? servico['tecnico'].toString().trim()
+        : tecnicosDisponiveis.first;
+    if (!tecnicosDisponiveis.contains(tecnicoPadrao)) tecnicoPadrao = tecnicosDisponiveis.first;
 
     final motivoC = TextEditingController();
     String tipoEtiqueta = 'GARANTIA';
+    String tecnicoSel = tecnicoPadrao;
     bool enviando = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           backgroundColor: corCardFundo,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.orangeAccent)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Colors.orangeAccent),
+          ),
           title: const Row(
             children: [
               Icon(Icons.replay_circle_filled, color: Colors.orangeAccent, size: 22),
@@ -174,17 +202,29 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Cliente: ${servico['cliente'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoSuave)),
-                if (numOS != null) Text("Ref: $numOS", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text("Cliente: ${servico['cliente'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corCianoSuave)),
+                Text("Ref. O.S.: $numOS", style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                if (servico['endereco'] != null && servico['endereco'].toString().isNotEmpty)
+                  Text("📍 ${servico['endereco']}", style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
                 const SizedBox(height: 10),
-                const Text('Motivo da Devolução:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
-                const SizedBox(height: 6),
+                const Text('Selecione o Funcionário que Recebe:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corCianoEletrico)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  value: tecnicoSel,
+                  dropdownColor: const Color(0xFF142030),
+                  decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                  items: tecnicosDisponiveis.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
+                  onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
+                ),
+                const SizedBox(height: 10),
+                const Text('Tipo de Retorno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
+                const SizedBox(height: 4),
                 Wrap(
                   spacing: 6,
-                  children: ['GARANTIA', 'RETRABALHO', 'AJUSTE'].map((t) {
+                  children: ['GARANTIA', 'RETRABALHO', 'AJUSTE', 'EXECUÇÃO'].map((t) {
                     final sel = tipoEtiqueta == t;
                     return ChoiceChip(
-                      label: Text(t, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
+                      label: Text(t, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
                       selected: sel,
                       selectedColor: Colors.orangeAccent,
                       backgroundColor: corCardFundo,
@@ -199,7 +239,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   maxLines: 5,
                   decoration: const InputDecoration(
                     labelText: 'Instruções para o Técnico *',
-                    hintText: 'Explique o que precisa ser refeito ou ajustado...',
+                    hintText: 'Explique o que o técnico precisa executar no local...',
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -212,24 +252,48 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
               onPressed: enviando ? null : () async {
                 final motivo = motivoC.text.trim();
-                if (motivo.isEmpty) return;
+                if (motivo.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Informe as instruções para o técnico!')));
+                  return;
+                }
                 setD(() => enviando = true);
                 try {
-                  if (numOS != null) {
-                    await supabase.from('ordens_servico').update({
-                      'status': 'Em Andamento',
-                      'prioridade': tipoEtiqueta,
-                      'observacao_tecnico': "[RETORNO $tipoEtiqueta]: $motivo",
-                      'visualizado_pelo_tecnico': false,
-                    }).ilike('numero_os', numOS);
+                  final checarOS = await supabase.from('ordens_servico').select('id').ilike('numero_os', numOS).maybeSingle();
+
+                  final dadosOS = {
+                    'numero_os': numOS,
+                    'cliente': servico['cliente'] ?? '',
+                    'telefone': servico['telefone'] ?? '',
+                    'endereco': servico['endereco'] ?? '',
+                    'descricao_problema': "⚠️ [$tipoEtiqueta - $numOS]: $motivo\nServiço original: ${servico['descricao'] ?? ''}".trim(),
+                    'tecnico_designado': tecnicoSel,
+                    'prioridade': tipoEtiqueta,
+                    'status': 'Em Andamento',
+                    'data_abertura': DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
+                    'visualizado_pelo_tecnico': false,
+                  };
+
+                  if (checarOS != null && checarOS['id'] != null) {
+                    await supabase.from('ordens_servico').update(dadosOS).eq('id', checarOS['id']);
+                  } else {
+                    await supabase.from('ordens_servico').insert(dadosOS);
                   }
+
                   if (servico['id'] != null) {
                     await supabase.from('servicos').delete().eq('id', servico['id']);
                   }
+
+                  ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                    tecnicoLogin: tecnicoSel,
+                    numeroOS: numOS,
+                    cliente: servico['cliente'] ?? '',
+                    categoria: tipoEtiqueta,
+                  );
+
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ O.S. devolvida ao técnico como $tipoEtiqueta!')),
+                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ $numOS enviada para $tecnicoSel executar como $tipoEtiqueta!')),
                     );
                   }
                 } catch (e) {
@@ -238,7 +302,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   if (ctx.mounted) setD(() => enviando = false);
                 }
               },
-              child: const Text('Confirmar Devolução', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Enviar ao Funcionário', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -246,6 +310,9 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     );
   }
 
+  // ==========================================================================
+  // TELA CHEIA AMPLA (Dialog.fullscreen) COM AS 3 OPÇÕES DE FATURAMENTO
+  // ==========================================================================
   void _modalGerenciarItensDoServico(Map<String, dynamic> servico) {
     final num valorTotalOriginal = servico['valor_unitario'] is num ? servico['valor_unitario'] : 0;
     final List<ItemServico> itens = _converterDescricaoEmItens(servico['descricao']?.toString() ?? '', valorTotalOriginal);
@@ -1001,6 +1068,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                           scrollDirection: Axis.horizontal,
                                           child: Row(
                                             children: [
+                                              // 1. BOTAO EDITAR ($) - SUPRIMIDO SE JA ESTIVER FATURADO!
                                               if (!fat) ...[
                                                 OutlinedButton.icon(
                                                   style: OutlinedButton.styleFrom(
@@ -1016,7 +1084,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                                 ),
                                                 const SizedBox(width: 4),
                                               ],
-                                              if (!fat && s['descricao'] != null && (s['descricao'].toString().contains('[OS') || s['descricao'].toString().contains('[O.S'))) ...[
+                                              // 2. BOTAO O.S. (VOLTAR O.S.) - LIBERADO PARA TODOS OS SERVICOS PENDENTES (INCLUSIVE SPAZIO E ATLANTIC)
+                                              if (!fat) ...[
                                                 OutlinedButton.icon(
                                                   style: OutlinedButton.styleFrom(
                                                     side: const BorderSide(color: Colors.orangeAccent, width: 1),

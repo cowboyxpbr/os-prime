@@ -285,7 +285,28 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                       Text("📍 ${orc['cliente_endereco']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                     const SizedBox(height: 10),
                     const Divider(color: Colors.white24),
-                    const Text('1. MARQUE AS PEÇAS/SERVIÇOS QUE O TÉCNICO IRÁ VER:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 10),
+                    const Text('DESTINO DO EQUIPAMENTO:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('🛠️ Oficina (Conserto em Bancada)', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          selected: tipoExecucao == 'Oficina',
+                          selectedColor: Colors.orangeAccent,
+                          onSelected: (v) => setD(() => tipoExecucao = 'Oficina'),
+                        ),
+                        ChoiceChip(
+                          label: const Text('🚗 Rua (Instalação / Campo)', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          selected: tipoExecucao == 'Rua',
+                          selectedColor: corCianoEletrico,
+                          onSelected: (v) => setD(() => tipoExecucao = 'Rua'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  const Text('1. MARQUE AS PEÇAS/SERVIÇOS QUE O TÉCNICO IRÁ VER:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
                     const Text('🔒 Valores em R\$ são suprimidos do celular do técnico.', style: TextStyle(color: Colors.grey, fontSize: 10)),
                     const SizedBox(height: 6),
                     if (todosItens.isEmpty)
@@ -417,7 +438,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                           'descricao_problema': descOS,
                           'tecnico_designado': tecnicoSel,
                           'prioridade': prioridadeSel,
-                          'status': 'Em Andamento',
+                          'status': (tipoExecucao == 'Oficina') ? 'Em Reparo de Bancada' : 'Em Andamento',
                           'data_abertura': "${DateFormat('dd/MM/yyyy').format(dataExecucao)} • ${horaExecucao.format(ctx)}",
                           'visualizado_pelo_tecnico': false,
                         };
