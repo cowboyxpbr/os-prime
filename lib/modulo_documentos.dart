@@ -1,10 +1,9 @@
 import 'servico_arquivo.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
-// ARQUIVO: ORÇAMENTOS COM DATA FLEXÍVEL, EQUIPAMENTOS, LAUDO E HISTÓRICO 90 DIAS
+// ARQUIVO: ORÇAMENTOS COM 5 GUIAS, DESPACHO BLOQUEANTE E HISTÓRICO 90 DIAS
 // lib/modulo_documentos.dart
 // ============================================================================
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import 'universal_io.dart';
 import 'package:flutter/material.dart';
@@ -69,7 +68,6 @@ class ServicoOrcamentosSalvos {
     await salvarLista(lista);
   }
 
-  // AUTO-LIMPEZA: Descarta orçamentos com mais de 90 dias
   static Future<void> limparAntigos90Dias() async {
     try {
       final lista = await carregar();
@@ -99,13 +97,7 @@ class ServicoOrcamentosSalvos {
 }
 
 // ============================================================================
-// 2. TELA DE HISTÓRICO DE ORÇAMENTOS SALVOS
-// ============================================================================
-// ============================================================================
-// 2. TELA DE HISTÓRICO COM ABAS "EM ABERTO" E "ORÇ. APROVADOS" (SEM FATURAMENTO)
-// ============================================================================
-// ============================================================================
-// 2. TELA DE HISTÓRICO COM 3 ABAS: AGUARDANDO ORÇAMENTO, EM ABERTO E APROVADOS
+// 2. TELA CENTRAL DE ORÇAMENTOS: 5 GUIAS COM DESPACHO BLOQUEANTE
 // ============================================================================
 class TelaListaOrcamentosSalvos extends StatefulWidget {
   const TelaListaOrcamentosSalvos({super.key});
@@ -115,6 +107,36 @@ class TelaListaOrcamentosSalvos extends StatefulWidget {
 }
 
 class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
+  // Confirmação para alternar etapa caso outra já esteja despachada
+  void _confirmarAlteracaoDespacho(Map<String, dynamic> orc, String novoDestino) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: corCardFundo,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.amberAccent)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.amberAccent, size: 22),
+            SizedBox(width: 8),
+            Text('Alterar Etapa Ativa?', style: TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text('Este orçamento já possui uma etapa despachada. Deseja realmente redirecionar para $novoDestino?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black),
+            child: const Text('Confirmar e Despachar'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _modalDevolverOSComItens(orc, tipoForcado: novoDestino);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   List<ItemServico> _converterItensParaOS(String descricao, num valorTotal) {
     if (descricao.trim().isEmpty) return [];
     final partes = descricao.split(' | ');
@@ -151,11 +173,12 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
 
     return resultado;
   }
+
   List<Map<String, dynamic>> _lista = [];
   List<Map<String, dynamic>> _osAguardandoOrcamento = [];
   List<Map<String, dynamic>> _todasOSDoBanco = [];
   List<String> _tecnicosDisponiveis = [];
-  String _abaOrcamentos = 'AguardandoOS'; // 'AguardandoOS', 'Aberto', 'Aprovado'
+  String _abaOrcamentos = 'AguardandoOS';
   String _filtro = '';
   bool _carregando = true;
 
@@ -170,9 +193,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     await ServicoOrcamentosSalvos.limparAntigos90Dias();
     final orcs = await ServicoOrcamentosSalvos.carregar();
 
-    // Carrega O.S. que os técnicos enviaram para orçamento da rua
     List<Map<String, dynamic>> listaOS = [];
-    
     try {
       final res = await supabase
           .from('ordens_servico')
@@ -189,7 +210,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
       setState(() {
         _lista = orcs;
         _osAguardandoOrcamento = listaOS;
-        
         _carregando = false;
       });
     }
@@ -224,15 +244,12 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: corVerdeWhats,
-          content: Text('✅ Orçamento marcado como APROVADO! Disponível na aba "Orç. Aprovados".'),
+          content: Text('✅ Orçamento marcado como APROVADO! Disponível na aba "Aprovados".'),
         ),
       );
     }
   }
 
-  // ==========================================================================
-  // DEVOLVER A MESMA O.S. AO TÉCNICO COM ITENS SELECIONÁVEIS E VALORES SUPRIMIDOS
-  // ==========================================================================
   void _modalDevolverOSComItens(Map<String, dynamic> orc, {String? tipoForcado}) async {
     String tipoExecucao = tipoForcado ?? 'Rua';
     final String numOS = (orc['numero_os_origem'] != null && orc['numero_os_origem'].toString().trim().isNotEmpty)
@@ -244,7 +261,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
     DateTime dataExecucao = DateTime.now();
     TimeOfDay horaExecucao = const TimeOfDay(hour: 8, minute: 0);
 
-    // Extrai os itens do orçamento (suprimindo valores em R$ para o técnico)
     final num valTotal = orc['valor_total'] is num ? orc['valor_total'] : 0.0;
     final List<ItemServico> todosItens = (orc['itens_lista'] != null && orc['itens_lista'] is List)
         ? (orc['itens_lista'] as List).map((e) => ItemServico.fromMap(Map<String, dynamic>.from(e))).toList()
@@ -268,7 +284,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
             title: Row(
               children: [
                 const Icon(Icons.assignment_turned_in_rounded, color: Colors.amberAccent, size: 22),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text('Devolver $numOS ao Técnico', style: const TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
                 ),
@@ -286,7 +302,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                       Text("📍 ${orc['cliente_endereco']}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                     const SizedBox(height: 10),
                     const Divider(color: Colors.white24),
-                                        const SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     const Text('DESTINO DO EQUIPAMENTO:', style: TextStyle(color: corCianoEletrico, fontSize: 11, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Wrap(
@@ -307,7 +323,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                  const Text('1. MARQUE AS PEÇAS/SERVIÇOS QUE O TÉCNICO IRÁ VER:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const Text('1. MARQUE AS PEÇAS/SERVIÇOS QUE O TÉCNICO IRÁ VER:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
                     const Text('🔒 Valores em R\$ são suprimidos do celular do técnico.', style: TextStyle(color: Colors.grey, fontSize: 10)),
                     const SizedBox(height: 6),
                     if (todosItens.isEmpty)
@@ -341,7 +357,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         ),
                       ),
                     const SizedBox(height: 12),
-                    const Text('2. SELECIONE O TÉCNICO DE CAMPO:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    const Text('2. SELECIONE O FUNCIONÁRIO:', style: TextStyle(color: corCianoEletrico, fontSize: 10.5, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     DropdownButtonFormField<String>(
                       value: tecnicoSel,
@@ -422,7 +438,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                     : () async {
                         setD(() => despachando = true);
 
-                        // Monta o texto de itens autorizados SEM valores para o técnico
                         final itensAutorizadosTexto = itensSelecionados.map((idx) {
                           final it = todosItens[idx];
                           final qStr = (it.quantidade % 1 == 0) ? it.quantidade.toInt().toString() : it.quantidade.toString();
@@ -445,7 +460,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         };
 
                         try {
-                          // 🛡️ ANTI-DUPLICAÇÃO: Se já existia O.S., atualiza a mesma! Se não, insere.
                           final checar = await supabase.from('ordens_servico').select('id').ilike('numero_os', numOS).maybeSingle();
                           if (checar != null && checar['id'] != null) {
                             await supabase.from('ordens_servico').update(dadosOS).eq('id', checar['id']);
@@ -455,15 +469,22 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                             await supabase.from('ordens_servico').insert(dadosOS);
                           }
 
-                          ServicoNotificacaoOneSignal.enviarNotificacaoOS(
-                            tecnicoLogin: tecnicoSel!,
-                            numeroOS: numOS,
-                            cliente: orc['cliente_nome'] ?? 'Cliente',
-                            categoria: prioridadeSel,
-                          );
+                          if (tipoExecucao == 'Oficina') {
+                            ServicoNotificacaoOneSignal.enviarNotificacaoOficina(
+                              tecnicoLogin: tecnicoSel!,
+                              numeroOS: numOS,
+                              cliente: orc['cliente_nome'] ?? 'Cliente',
+                            );
+                          } else {
+                            ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                              tecnicoLogin: tecnicoSel!,
+                              numeroOS: numOS,
+                              cliente: orc['cliente_nome'] ?? 'Cliente',
+                              categoria: prioridadeSel,
+                            );
+                          }
 
                           orc['status'] = "Aprovado - $tipoExecucao ($numOS)";
-                          orc['numero_os_origem'] = numOS;
                           orc['numero_os_origem'] = numOS;
                           await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
                           await _iniciar();
@@ -473,7 +494,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 backgroundColor: Colors.green,
-                                content: Text('🚀 $numOS devolvida com sucesso para $tecnicoSel sem valores!'),
+                                content: Text('🚀 $numOS despachada com sucesso para $tecnicoSel na $tipoExecucao!'),
                               ),
                             );
                           }
@@ -529,31 +550,15 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
       final st = (o['status'] ?? '').toString();
       if (st != 'Aprovado' && !st.startsWith('Aprovado')) return false;
       if (st.contains('Faturad') || st.contains('Finalizad')) return false;
-
-      final numOS = (o['numero_os_origem'] ?? '').toString().trim().toLowerCase();
-      final cliNome = (o['cliente_nome'] ?? '').toString().trim().toLowerCase();
-      final osConcluida = _todasOSDoBanco.any((os) {
-        final stOS = (os['status'] ?? '').toString().trim().toLowerCase();
-        final concluidaOuFat = stOS == 'concluída' || stOS == 'concluida' || stOS == 'faturada';
-        if (!concluidaOuFat) return false;
-        final nBanco = (os['numero_os'] ?? '').toString().trim().toLowerCase();
-        final cBanco = (os['cliente'] ?? '').toString().trim().toLowerCase();
-        return (numOS.isNotEmpty && nBanco == numOS) || (cliNome.isNotEmpty && cBanco == cliNome);
-      });
-      return !osConcluida;
+      return true;
     }).toList();
-
-    final listaAtiva = _abaOrcamentos == 'Aberto' ? abertos : aprovados;
 
     return Scaffold(
       body: Column(
         children: [
-          const BannerOSPrime(subtituloTela: 'Orçamentos', exibirBotaoVoltar: true),
+          const BannerOSPrime(subtituloTela: 'Central de Orçamentos', exibirBotaoVoltar: true),
 
-          // ==================================================================
-          // 3 ABAS: 1. AGUARDANDO ORÇAMENTO (O.S.) | 2. EM ABERTO | 3. APROVADOS
-          // ==================================================================
-                    Padding(
+          Padding(
             padding: const EdgeInsets.fromLTRB(6, 8, 6, 4),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -563,11 +568,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                   const SizedBox(width: 4),
                   _botaoAbaOrcamento('Aprovado', "✅ Aprovados (${aprovados.length})", corVerdeWhats),
                   const SizedBox(width: 4),
-                  _botaoAbaOrcamento('EmAndamento', "🚀 Em Execução", corCianoEletrico),
-                  const SizedBox(width: 4),
                   _botaoAbaOrcamento('Aberto', "🟡 Em Aberto (${abertos.length})", Colors.amberAccent),
-                  const SizedBox(width: 4),
-                  _botaoAbaOrcamento('Historico', "📚 Histórico", Colors.grey),
                 ],
               ),
             ),
@@ -599,27 +600,23 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
 
   Widget _botaoAbaOrcamento(String id, String rotulo, Color cor) {
     final sel = _abaOrcamentos == id;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _abaOrcamentos = id),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: sel ? cor.withOpacity(0.22) : corCardFundo,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: sel ? cor : Colors.white12, width: sel ? 1.4 : 1),
-          ),
-          child: Center(
-            child: Text(
-              rotulo,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: sel ? cor : Colors.grey,
-                fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-                fontSize: 10.5,
-              ),
+    return InkWell(
+      onTap: () => setState(() => _abaOrcamentos = id),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: sel ? cor.withOpacity(0.22) : corCardFundo,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: sel ? cor : Colors.white12, width: sel ? 1.4 : 1),
+        ),
+        child: Center(
+          child: Text(
+            rotulo,
+            style: TextStyle(
+              color: sel ? cor : Colors.grey,
+              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+              fontSize: 10.5,
             ),
           ),
         ),
@@ -838,7 +835,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                       },
                     ),
                     const Spacer(),
-                                        if (!isAprovado)
+                    if (!isAprovado)
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: corVerdeWhats,
@@ -850,7 +847,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                       ),
-                                                                                if (isAprovado)
+                    if (isAprovado)
                       Builder(builder: (ctx) {
                         final bool emOficina = status.contains('Oficina');
                         final bool emRua = status.contains('Rua');
@@ -858,7 +855,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         return Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // 1. BOTÃO EXECUÇÃO DE BANCADA (OFICINA)
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: emOficina ? Colors.orangeAccent : Colors.grey.shade800,
@@ -877,7 +873,6 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                               },
                             ),
                             const SizedBox(width: 4),
-                            // 2. BOTÃO EXECUÇÃO EXTERNA (RUA)
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: emRua ? corCianoEletrico : Colors.grey.shade800,
@@ -945,8 +940,8 @@ class _TelaEmissaoDocState extends State<TelaEmissaoDoc> {
   final ImagePicker _picker = ImagePicker();
   bool _gerandoPdf = false;
   dynamic _idServicoFaturamentoOrigem;
-dynamic _idOSOrigem;
-String? _numeroOSOrigem;
+  dynamic _idOSOrigem;
+  String? _numeroOSOrigem;
   String? _idOrcamentoEditando;
 
   double get _totalGeral => _itens.fold(0.0, (acc, item) => acc + item.subtotal);
@@ -976,7 +971,6 @@ String? _numeroOSOrigem;
       final double val = (orc['valor_total'] is num) ? (orc['valor_total'] as num).toDouble() : 0.0;
       _itens.addAll(_converterDescricaoEmItens(orc['descricao_itens'] ?? '', val));
 
-      // Carrega equipamentos salvos caso existam
       if (orc['equipamentos'] != null && orc['equipamentos'] is List) {
         for (var e in (orc['equipamentos'] as List)) {
           _equipamentos.add(EquipamentoRelatorio.fromMap(Map<String, dynamic>.from(e)));
@@ -994,7 +988,6 @@ String? _numeroOSOrigem;
     super.dispose();
   }
 
-  // SELETOR DE DATA FLEXÍVEL (RETROATIVA, HOJE OU ADIANTADA)
   Future<void> _selecionarData() async {
     final fmt = DateFormat('dd/MM/yyyy');
     DateTime inicial = DateTime.now();
@@ -1027,7 +1020,6 @@ String? _numeroOSOrigem;
     }
   }
 
-  // MODAL PARA ADICIONAR / EDITAR EQUIPAMENTO NO ORÇAMENTO
   void _modalEquipamentoDialog([int? indexEdit]) {
     final bool isEd = indexEdit != null;
     final tipoC = TextEditingController(text: isEd ? _equipamentos[indexEdit].tipo : '');
@@ -1172,7 +1164,7 @@ String? _numeroOSOrigem;
       'laudo_descritivo': _laudoCampoCtrl.text.trim(),
       'obs': _obsCtrl.text.trim(),
       'valor_total': _totalGeral,
-      'data': _dataDocCtrl.text.trim(), // DATA SELECIONADA NO CALENDÁRIO
+      'data': _dataDocCtrl.text.trim(),
       'status': widget.orcamentoParaEditar?['status'] ?? 'Pendente',
       'equipamentos': _equipamentos.map((e) => e.toMap()).toList(),
       if (_idOSOrigem != null) 'id_os_origem': _idOSOrigem,
@@ -1186,15 +1178,6 @@ String? _numeroOSOrigem;
         const SnackBar(backgroundColor: Colors.green, content: Text('💾 Orçamento salvo no Histórico de Orçamentos!')),
       );
     }
-  }
-
-  String _prepararLaudoComEquipamentos() {
-    String laudo = _laudoCampoCtrl.text.trim();
-    if (_equipamentos.isNotEmpty) {
-      final eqTxt = _equipamentos.map((e) => "• ${e.tipo} (Marca: ${e.marca} | Modelo: ${e.modelo} | Potência: ${e.potencia} | Tensão: ${e.tensao})").join("\n");
-      laudo = "EQUIPAMENTOS EM AVALIAÇÃO:\n$eqTxt\n\n$laudo".trim();
-    }
-    return laudo;
   }
 
   Future<void> _dispararImpressaoOuCompartilhamento(bool diretoParaImpressao) async {
@@ -1214,7 +1197,7 @@ String? _numeroOSOrigem;
         equipamentos: _equipamentos,
         fotos: _fotos,
       );
-            if (widget.tipoDoc == 'ORÇAMENTO' || widget.tipoDoc != 'RECIBO') {
+      if (widget.tipoDoc == 'ORÇAMENTO' || widget.tipoDoc != 'RECIBO') {
         await _salvarOrcamentoNaLista(mostrarFeedback: false);
       }
       await _marcarServicoComoFaturadoSeAplicavel();
@@ -1310,9 +1293,6 @@ String? _numeroOSOrigem;
     );
   }
 
-  // ==========================================================================
-  // PARTE 2.3: PUXAR O.S. AGUARDANDO ORÇAMENTO E PREENCHER COM 1 CLIQUE
-  // ==========================================================================
   void _modalPuxarDaOS() async {
     List<Map<String, dynamic>> pendentes = [];
     try {
@@ -1353,7 +1333,7 @@ String? _numeroOSOrigem;
               height: MediaQuery.of(context).size.height * 0.75,
               child: Column(
                 children: [
-                  const Text('\u{1F4E5} Puxar O.S. Aguardando Orçamento',
+                  const Text('📥 Puxar O.S. Aguardando Orçamento',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.amber)),
                   const SizedBox(height: 8),
                   TextField(
@@ -1464,7 +1444,7 @@ String? _numeroOSOrigem;
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
                                           backgroundColor: Colors.green,
-                                          content: Text('\u2705 O.S. #$numOS importada e travada como "Orçada"!'),
+                                          content: Text('✅ O.S. #$numOS importada e travada como "Orçada"!'),
                                         ),
                                       );
                                     }
@@ -1596,7 +1576,7 @@ String? _numeroOSOrigem;
     }
   }
 
-      void _modalEditarLegendaEAvariaFoto(int index) {
+  void _modalEditarLegendaEAvariaFoto(int index) {
     final legCtrl = TextEditingController(text: _fotos[index].legenda);
     final descCtrl = TextEditingController(text: _fotos[index].descricao);
     final avariaCtrl = TextEditingController(text: _fotos[index].avaria);
@@ -1876,7 +1856,7 @@ String? _numeroOSOrigem;
                           Text("📍 ${_clienteAtual!.enderecoCompleto}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                         ],
                         const Divider(height: 12),
-                                                Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             if (isRecibo) ...[
@@ -1959,9 +1939,6 @@ String? _numeroOSOrigem;
                   ),
                   const SizedBox(height: 8),
 
-                  // ============================================================
-                  // TÍTULO DESTAQUE + SELETOR DE DATA FLEXÍVEL (CALENDÁRIO)
-                  // ============================================================
                   Row(
                     children: [
                       Expanded(
@@ -1998,14 +1975,6 @@ String? _numeroOSOrigem;
                   ),
                   const SizedBox(height: 10),
 
-                  // ============================================================
-                  // SEÇÃO DE EQUIPAMENTOS DO ORÇAMENTO (TIPO, MARCA, POTÊNCIA...)
-                  // ============================================================
-                  
-
-                                    // ============================================================
-                  // 1. EQUIPAMENTOS EM AVALIAÇÃO (ORÇAMENTO)
-                  // ============================================================
                   if (isOrcamento) ...[
                     const SizedBox(height: 12),
                     Row(
@@ -2069,9 +2038,6 @@ String? _numeroOSOrigem;
                     ),
                   ],
 
-                  // ============================================================
-                  // 2. PEÇAS & SERVIÇOS (ITENS COM VALORES)
-                  // ============================================================
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2123,9 +2089,6 @@ String? _numeroOSOrigem;
                       );
                     }),
 
-                  // ============================================================
-                  // 3. FAIXA TOTAL GERAL
-                  // ============================================================
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2146,9 +2109,6 @@ String? _numeroOSOrigem;
                     ),
                   ),
 
-                  // ============================================================
-                  // 4. ANEXAR FOTOS DE CAMPO
-                  // ============================================================
                   const SizedBox(height: 14),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2175,7 +2135,7 @@ String? _numeroOSOrigem;
                         scrollDirection: Axis.horizontal,
                         itemCount: _fotos.length,
                         itemBuilder: (ctx, i) {
-                                                    return Stack(
+                          return Stack(
                             children: [
                               InkWell(
                                 onTap: () => _modalEditarLegendaEAvariaFoto(i),
@@ -2217,9 +2177,6 @@ String? _numeroOSOrigem;
                       ),
                     ),
 
-                  // ============================================================
-                  // 5. OBSERVAÇÕES / GARANTIA
-                  // ============================================================
                   const SizedBox(height: 12),
                   TextField(
                     controller: _obsCtrl,
@@ -2231,12 +2188,7 @@ String? _numeroOSOrigem;
                     ),
                   ),
 
-                  // ============================================================
-                  // 6. BOTÕES DE AÇÃO (SALVAR, IMPRIMIR E WHATSAPP)
-                  // ============================================================
                   const SizedBox(height: 16),
-                  
-
                   Row(
                     children: [
                       Expanded(
