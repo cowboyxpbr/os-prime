@@ -663,18 +663,22 @@ class ServicoNotificacaoOneSignal {
   static const String _restApiKey =
       'os_v2_app_kf2oyuahq5dqrlqw6jtu4qwgk6vytbicuuau3fvkke63tldeo2c3rzuolaramywtc5ot2pqm2hzlnsmzw3s6gfnleoztkfhingrr6fa';
 
-  static Future<void> _dispararREST({
+    static Future<void> _dispararREST({
     required List<String> logins,
     required String titulo,
     required String mensagem,
     Map<String, dynamic>? dados,
+    String? sendAfterUtc,
   }) async {
-    final destinos = logins
-        .map((l) => l.trim().toLowerCase().replaceAll('@', ''))
-        .where((l) => l.isNotEmpty)
-        .toSet()
-        .toList();
-
+    final Set<String> destinosSet = {};
+    for (var l in logins) {
+      final limpo = l.trim().replaceAll('@', '');
+      if (limpo.isNotEmpty) {
+        destinosSet.add(limpo.toLowerCase());
+        destinosSet.add(limpo);
+      }
+    }
+    final destinos = destinosSet.toList();
     if (destinos.isEmpty) return;
 
     try {
@@ -687,6 +691,8 @@ class ServicoNotificacaoOneSignal {
         'app_id': _appId,
         'target_channel': 'push',
         'include_aliases': {'external_id': destinos},
+        'include_external_user_ids': destinos,
+        'channel_for_external_user_ids': 'push',
         'headings': {'pt': titulo, 'en': titulo},
         'contents': {'pt': mensagem, 'en': mensagem},
         'small_icon': 'ic_launcher',
@@ -698,13 +704,13 @@ class ServicoNotificacaoOneSignal {
         'ios_sound': 'default',
         'ios_badgeType': 'Increase',
         'ios_badgeCount': 1,
+        if (sendAfterUtc != null) 'send_after': sendAfterUtc,
         if (dados != null) 'data': dados,
       };
 
       request.add(utf8.encode(jsonEncode(payload)));
       final response = await request.close();
       final responseBody = await response.transform(utf8.decoder).join();
-
       debugPrint("🔔 Push OneSignal (${response.statusCode}): $responseBody");
       client.close();
     } catch (e) {
@@ -712,7 +718,7 @@ class ServicoNotificacaoOneSignal {
     }
   }
 
-  // 1. NOTIFICAÇÃO DE CHAT COM ÍCONE DO APP
+  // 1. NOTIFICAÇÃO DE CHAT COM MÚLTIPLOS ALIASES
   static Future<void> enviarNotificacaoChat({
     required String destinatarioLogin,
     required String remetenteNome,
@@ -720,13 +726,26 @@ class ServicoNotificacaoOneSignal {
   }) async {
     await _dispararREST(
       logins: [destinatarioLogin],
-      titulo: '💬 $remetenteNome (Eletro Heinzen)',
+      titulo: '💬 $remetenteNome',
       mensagem: texto,
       dados: {'tipo': 'chat', 'remetente': remetenteNome},
     );
   }
 
-  // 2. RECEBIMENTO DE O.S. COM IDENTIFICAÇÃO E CATEGORIA
+  // 2. NOTIFICAÇÃO DE O.S. DE OFICINA (BANCADA)
+  static Future<void> enviarNotificacaoOficina({
+    required String tecnicoLogin,
+    required String numeroOS,
+    required String cliente,
+  }) async {
+    await _dispararREST(
+      logins: [tecnicoLogin],
+      titulo: '🛠️ Nova O.S. na Oficina ($numeroOS)',
+      mensagem: 'Cliente: $cliente. Equipamento em bancada destinado a você!',
+      dados: {'tipo': 'ordem_servico', 'os_id': numeroOS, 'categoria': 'Oficina'},
+    );
+  }
+
   static Future<void> enviarNotificacaoOS({
     required String tecnicoLogin,
     required String numeroOS,
@@ -808,7 +827,7 @@ class ServicoNotificacaoOneSignal {
     );
   }
 
-  static Future<void> agendarAlarmeNotaPush({
+    static Future<void> agendarAlarmeNotaPush({
     required String tituloNota,
     required String conteudoNota,
     required DateTime dataAlarmeLocal,
@@ -819,8 +838,9 @@ class ServicoNotificacaoOneSignal {
       final utcStr = dataAlarmeLocal.toUtc().toIso8601String();
       await _dispararREST(
         logins: [sessao.usuario, sessao.nome],
-        titulo: '⏰ ALARME DE EVENTO: $tituloNota',
+        titulo: '⏰ ALARME: $tituloNota',
         mensagem: conteudoNota.isNotEmpty ? conteudoNota : 'Horário programado atingido!',
+        sendAfterUtc: utcStr,
         dados: {'tipo': 'alarme_nota', 'titulo': tituloNota},
       );
     } catch (_) {}
@@ -828,7 +848,7 @@ class ServicoNotificacaoOneSignal {
 }
 
 // ============================================================================
-// WIDGETS VISUAIS GLOBAIS: BANNER COMPLETO 100% LARGURA COM cabecalho.png
+// WIDGETS VISUAIS GLOBAIScalho.png
 // ============================================================================
 
 

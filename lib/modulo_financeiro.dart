@@ -177,6 +177,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
 
     final motivoC = TextEditingController();
     String tipoEtiqueta = 'GARANTIA';
+    String destinoOSDevolvida = 'Oficina';
     String tecnicoSel = tecnicoPadrao;
     bool enviando = false;
 
@@ -217,6 +218,26 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
                 ),
                 const SizedBox(height: 10),
+                                const SizedBox(height: 10),
+                const Text('DESTINO DA O.S. DEVOLVIDA:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corCianoEletrico)),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('🛠️ Oficina (Bancada)', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                      selected: destinoOSDevolvida == 'Oficina',
+                      selectedColor: Colors.orangeAccent,
+                      onSelected: (v) => setD(() => destinoOSDevolvida = 'Oficina'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('🚗 Rua (Campo)', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                      selected: destinoOSDevolvida == 'Rua',
+                      selectedColor: corCianoEletrico,
+                      onSelected: (v) => setD(() => destinoOSDevolvida = 'Rua'),
+                    ),
+                  ],
+                ),
                 const Text('Tipo de Retorno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
                 const SizedBox(height: 4),
                 Wrap(
@@ -268,7 +289,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                     'descricao_problema': "⚠️ [$tipoEtiqueta - $numOS]: $motivo\nServiço original: ${servico['descricao'] ?? ''}".trim(),
                     'tecnico_designado': tecnicoSel,
                     'prioridade': tipoEtiqueta,
-                    'status': 'Em Andamento',
+                    'status': destinoOSDevolvida == 'Oficina' ? 'Em Reparo de Bancada' : 'Em Andamento',
+                      'prioridade': destinoOSDevolvida == 'Oficina' ? 'Oficina' : tipoEtiqueta,
                     'data_abertura': DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
                     'visualizado_pelo_tecnico': false,
                   };
@@ -525,31 +547,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     );
   }
 
-  Future<void> _alternarStatusFaturado(Map<String, dynamic> servico) async {
-    final st = (servico['status'] ?? '').toString().trim();
-    final bool estaFaturado = st == 'Faturado' || st == 'Quitado';
-    final novoStatus = estaFaturado ? 'Pendente' : 'Faturado';
-
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: corCardFundo,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: estaFaturado ? Colors.amberAccent : corVerdeWhats)),
-        title: Text(estaFaturado ? 'Reverter para Pendente?' : 'Confirmar Faturamento?', style: TextStyle(color: estaFaturado ? Colors.amberAccent : corVerdeWhats, fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Text(estaFaturado ? 'Deseja retornar este serviço de "${servico['cliente']}" para a lista de pendentes?' : 'Confirmar que o serviço de "${servico['cliente']}" foi faturado/quitado?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: estaFaturado ? Colors.amberAccent : corVerdeWhats, foregroundColor: estaFaturado ? Colors.black : Colors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true) return;
-
+    Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
+    final novoStatus = tipo == 'Nota Fiscal' ? 'Faturado (NF)' : 'Faturado (Recibo)';
     try {
       await supabase.from('servicos').update({
         'status': novoStatus,
@@ -558,16 +557,182 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: estaFaturado ? Colors.amber.shade800 : corVerdeWhats,
-          content: Text(estaFaturado ? '↩️ Serviço revertido para Pendente' : '✅ Serviço faturado com sucesso!'),
-          duration: const Duration(seconds: 2),
+          backgroundColor: corVerdeWhats,
+          content: Text('✅ Serviço faturado via $tipo com sucesso! Movido para Faturados.'),
+          duration: const Duration(seconds: 3),
         ));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao atualizar: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao faturar: $e')));
       }
     }
+  }
+
+    Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
+    final novoStatus = tipo == 'Nota Fiscal' ? 'Faturado (NF)' : 'Faturado (Recibo)';
+    try {
+      await supabase.from('servicos').update({
+        'status': novoStatus,
+        'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
+      }).eq('id', servico['id']).timeout(const Duration(seconds: 15));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: corVerdeWhats,
+          content: Text('✅ Serviço faturado via $tipo com sucesso! Movido para Faturados.'),
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao faturar: $e')));
+      }
+    }
+  }
+
+  Future<void> _alternarStatusFaturado(Map<String, dynamic> servico) async {
+    final st = (servico['status'] ?? '').toString().trim();
+    final bool estaFaturado = st == 'Faturado' || st == 'Quitado' || st.startsWith('Faturado');
+
+    // 1. SE JÁ ESTIVER FATURADO -> PERGUNTA SE DESEJA REVERTER PARA PENDENTE
+    if (estaFaturado) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: corCardFundo,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.amberAccent)),
+          title: const Text('Reverter para Pendente?', style: TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+          content: Text('Deseja retornar este serviço de "${servico['cliente']}" para a lista de pendentes a faturar?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirmar Reversão'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmar != true) return;
+
+      try {
+        await supabase.from('servicos').update({
+          'status': 'Pendente',
+          'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
+        }).eq('id', servico['id']).timeout(const Duration(seconds: 15));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            backgroundColor: Colors.amber,
+            content: Text('↩️ Serviço revertido para Pendente.'),
+            duration: Duration(seconds: 2),
+          ));
+        }
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
+      }
+      return;
+    }
+
+    // 2. SE ESTIVER PENDENTE -> ABRE AS 2 OPÇÕES: FATURAR VIA RECIBO OU VIA NOTA FISCAL
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: corCardFundo,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corVerdeWhats, width: 1.5)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_outline_rounded, color: corVerdeWhats, size: 24),
+            SizedBox(width: 8),
+            Expanded(child: Text('Como deseja Faturar?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Cliente: ${servico['cliente'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corCianoSuave)),
+            const SizedBox(height: 12),
+            const Text('Selecione o formato de faturamento:', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            const SizedBox(height: 10),
+
+            // OPÇÃO A: VIA RECIBO
+            InkWell(
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _confirmarFaturamentoComTipo(servico, 'Recibo');
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: corCianoEletrico.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: corCianoEletrico.withOpacity(0.6)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.receipt_long_rounded, color: corCianoEletrico, size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('🧾 Faturar via Recibo', style: TextStyle(color: corCianoEletrico, fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text('Move para Faturados e gera o recibo quitado', style: TextStyle(color: Colors.grey, fontSize: 10.5)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: corCianoSuave, size: 13),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // OPÇÃO B: VIA NOTA FISCAL
+            InkWell(
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _confirmarFaturamentoComTipo(servico, 'Nota Fiscal');
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.amberAccent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amberAccent.withOpacity(0.6)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.description_rounded, color: Colors.amberAccent, size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('📄 Faturar via Nota Fiscal', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text('Move para Faturados até a integração da NF', style: TextStyle(color: Colors.grey, fontSize: 10.5)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, color: Colors.amberAccent, size: 13),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+        ],
+      ),
+    );
   }
 
   void _modalRelatorioConsolidadoDetalhado(List<Map<String, dynamic>> todosServicos) {
@@ -828,7 +993,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
 
                 final listaFiltrada = todos.where((s) {
                   final st = (s['status'] ?? 'Pendente').toString().trim();
-                  final bool isQuitado = st == 'Faturado' || st == 'Quitado';
+                  final bool isQuitado = st == 'Faturado' || st == 'Quitado' || st.startsWith('Faturado');
 
                   if (_aba == 'Pendente') {
                     if (isQuitado) return false;
@@ -1006,7 +1171,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                 final num totalValor = qtd * unit;
                                 final bool semPreco = totalValor <= 0;
                                 final String stAtual = (s['status'] ?? 'Pendente').toString().trim();
-                                final bool fat = stAtual == 'Faturado' || stAtual == 'Quitado';
+                                final bool fat = stAtual == 'Faturado' || stAtual == 'Quitado' || stAtual.startsWith('Faturado');
                                 final String tecnico = s['tecnico']?.toString() ?? 'Escritório';
 
                                 Color corBadge = Colors.amberAccent;

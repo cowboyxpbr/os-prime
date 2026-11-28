@@ -843,7 +843,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                       ),
-                                        if (isAprovado)
+                                                            if (isAprovado)
                       Builder(builder: (ctx) {
                         final bool emOficina = status.contains('Oficina');
                         final bool emRua = status.contains('Rua');

@@ -18,6 +18,176 @@ class TelaOSAdmin extends StatefulWidget {
 }
 
 class _TelaOSAdminState extends State<TelaOSAdmin> {
+  void _modalAlterarClienteOS(OrdemServico os) {
+    final novoNomeCtrl = TextEditingController(text: os.cliente);
+    final novoFoneCtrl = TextEditingController(text: os.telefone);
+    final novoEndCtrl = TextEditingController(text: os.endereco);
+    bool salvando = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          backgroundColor: corCardFundo,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
+          title: Row(
+            children: [
+              const Icon(Icons.person_pin_rounded, color: corCianoEletrico, size: 22),
+              const SizedBox(width: 8),
+              Expanded(child: Text("Alterar Cliente (${os.numeroOS})", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white))),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Substitua o nome genérico ou selecione o cliente real:", style: TextStyle(color: Colors.grey, fontSize: 11.5)),
+                const SizedBox(height: 12),
+                TextField(controller: novoNomeCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Nome do Cliente / Condomínio *', isDense: true)),
+                const SizedBox(height: 8),
+                TextField(controller: novoFoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone / WhatsApp', isDense: true)),
+                const SizedBox(height: 8),
+                TextField(controller: novoEndCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Endereço da Obra', isDense: true)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
+              onPressed: salvando
+                  ? null
+                  : () async {
+                      final n = novoNomeCtrl.text.trim();
+                      if (n.isEmpty) return;
+                      setD(() => salvando = true);
+                      try {
+                        final idNum = int.tryParse(os.id.toString()) ?? os.id;
+                        await Supabase.instance.client.from('ordens_servico').update({
+                          'cliente': n,
+                          'telefone': novoFoneCtrl.text.trim(),
+                          'endereco': novoEndCtrl.text.trim(),
+                        }).eq('id', idNum!);
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(backgroundColor: Colors.green, content: Text('✅ Cliente de ${os.numeroOS} atualizado para "$n"!')),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
+                      } finally {
+                        if (ctx.mounted) setD(() => salvando = false);
+                      }
+                    },
+              child: const Text('Salvar Cliente', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _modalDetalhesOSAdmin(OrdemServico os) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: corCardFundo,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: corCianoEletrico, width: 1.2),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: _corPrioridade(os.prioridade).withAlpha(40), borderRadius: BorderRadius.circular(6), border: Border.all(color: _corPrioridade(os.prioridade))),
+                      child: Text("${os.numeroOS} • ${os.prioridade.toUpperCase()}", style: TextStyle(color: _corPrioridade(os.prioridade), fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                    Text(os.status.toUpperCase(), style: TextStyle(color: _corStatus(os.status), fontWeight: FontWeight.bold, fontSize: 11)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: corTextoClaro))),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: corCianoEletrico), visualDensity: VisualDensity.compact),
+                      icon: const Icon(Icons.edit, size: 13, color: corCianoEletrico),
+                      label: const Text('Alterar Cliente', style: TextStyle(color: corCianoEletrico, fontSize: 11)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _modalAlterarClienteOS(os);
+                      },
+                    ),
+                  ],
+                ),
+                Text("📄 CPF/CNPJ: ${_mapaDocClientesAdm[os.cliente.trim().toLowerCase()] ?? 'Não informado'}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                if (os.telefone.isNotEmpty) Text("📞 Telefone: ${os.telefone}", style: const TextStyle(fontSize: 11.5, color: corCianoSuave)),
+                if (os.endereco.isNotEmpty) Text("📍 Endereço: ${os.endereco}", style: const TextStyle(fontSize: 11.5, color: corTextoClaro)),
+                const SizedBox(height: 10),
+                Text("👤 Técnico Designado: ${os.tecnicoDesignado}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corCianoEletrico)),
+                Text("📅 Aberta em: ${os.dataAbertura}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 10),
+                const Text("Problema Relatado / Instruções:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(8)),
+                  child: Text(os.descricaoProblema, style: const TextStyle(fontSize: 12.5, color: corTextoClaro)),
+                ),
+                if (os.observacaoTecnico != null && os.observacaoTecnico!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  const Text("Relatório do Técnico de Campo / Oficina:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corVerdeWhats)),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0x2625D366), borderRadius: BorderRadius.circular(8), border: Border.all(color: corVerdeWhats.withOpacity(0.5))),
+                    child: Text(os.observacaoTecnico!, style: const TextStyle(fontSize: 12, color: corVerdeWhats)),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
+                        icon: const Icon(Icons.alt_route_rounded, size: 16),
+                        label: const Text('Determinar Destino'),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _modalVoltarOSGarantia(os);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.grey)),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Fechar', style: TextStyle(color: Colors.white70)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   final Map<String, String> _mapaDocClientesAdm = {};
 
   Future<void> _carregarDocsSupabaseAdm() async {
@@ -944,26 +1114,31 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     );
   }
 
-  void _modalVoltarOSGarantia(OrdemServico os) {
+    void _modalVoltarOSGarantia(OrdemServico os) {
     final motivoC = TextEditingController();
-    String tipoEtiqueta = 'GARANTIA';
+    String destinoEscolhido = 'Oficina'; // 'Oficina', 'Orcamento', 'Rua', 'Faturamento'
+    String tecnicoSel = os.tecnicoDesignado;
+    if (_tecnicosDeCampo.isNotEmpty && !_tecnicosDeCampo.any((t) => t.nome == tecnicoSel)) {
+      tecnicoSel = _tecnicosDeCampo.first.nome;
+    }
     bool enviando = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
           backgroundColor: corCardFundo,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: Colors.orangeAccent),
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Colors.amberAccent, width: 1.5),
           ),
           title: const Row(
             children: [
-              Icon(Icons.replay_circle_filled, color: Colors.orangeAccent, size: 22),
+              Icon(Icons.alt_route_rounded, color: Colors.amberAccent, size: 24),
               SizedBox(width: 8),
               Expanded(
-                child: Text('Voltar O.S. (Garantia / Retorno)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: corTextoClaro)),
+                child: Text('Determinar Destino da O.S.', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
               ),
             ],
           ),
@@ -972,32 +1147,60 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Ref: ${os.numeroOS} • ${os.cliente}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corCianoSuave)),
-                Text("👤 Técnico: ${os.tecnicoDesignado}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text("O.S. #${os.numeroOS} • ${os.cliente}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: corCianoSuave)),
                 const SizedBox(height: 12),
-                const Text('Tipo de Retorno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: corTextoClaro)),
+                const Text('QUAL É O DESTINO DESTE EQUIPAMENTO?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corCianoEletrico)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
-                  children: ['GARANTIA', 'RETRABALHO', 'AJUSTE'].map((t) {
-                    final sel = tipoEtiqueta == t;
-                    return ChoiceChip(
-                      label: Text(t, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: sel ? Colors.black : corTextoClaro)),
-                      selected: sel,
+                  runSpacing: 6,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('🛠️ Oficina (Bancada)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      selected: destinoEscolhido == 'Oficina',
                       selectedColor: Colors.orangeAccent,
-                      backgroundColor: corCardFundo,
-                      onSelected: (v) { if (v) setD(() => tipoEtiqueta = t); },
-                    );
-                  }).toList(),
+                      onSelected: (v) => setD(() => destinoEscolhido = 'Oficina'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('📋 Orçamento', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      selected: destinoEscolhido == 'Orcamento',
+                      selectedColor: Colors.amberAccent,
+                      onSelected: (v) => setD(() => destinoEscolhido = 'Orcamento'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('🚗 Rua (Executar / Entregar)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      selected: destinoEscolhido == 'Rua',
+                      selectedColor: corCianoEletrico,
+                      onSelected: (v) => setD(() => destinoEscolhido = 'Rua'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('💰 Faturamento Direto', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      selected: destinoEscolhido == 'Faturamento',
+                      selectedColor: corVerdeWhats,
+                      onSelected: (v) => setD(() => destinoEscolhido = 'Faturamento'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
+                if (destinoEscolhido == 'Oficina' || destinoEscolhido == 'Rua') ...[
+                  const Text('Funcionário Designado:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
+                  const SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: tecnicoSel,
+                    dropdownColor: const Color(0xFF142030),
+                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                    items: _tecnicosDeCampo.map((t) => DropdownMenuItem(value: t.nome, child: Text(t.nome, style: const TextStyle(fontSize: 12)))).toList(),
+                    onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 TextField(
                   controller: motivoC,
                   minLines: 3,
                   maxLines: 5,
                   decoration: const InputDecoration(
-                    labelText: 'Instruções para o Técnico *',
-                    hintText: 'Explique o que precisa ser refeito ou verificado...',
+                    labelText: 'Instruções / Motivo do Despacho *',
+                    hintText: 'Explique o que deve ser feito nesta etapa...',
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -1007,43 +1210,82 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, foregroundColor: Colors.black),
-              icon: const Icon(Icons.send_rounded, size: 15),
-              label: const Text('Voltar O.S. ao Técnico', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              onPressed: enviando ? null : () async {
-                final motivo = motivoC.text.trim();
-                if (motivo.isEmpty) return;
-                setD(() => enviando = true);
-                try {
-                  final novoProb = "${os.descricaoProblema}\n\n⚠️ [RETORNO - $tipoEtiqueta]: $motivo";
-                  final idNum = int.tryParse(os.id.toString()) ?? os.id;
-                  await Supabase.instance.client.from('ordens_servico').update({
-                    'status': 'Em Andamento',
-                    'prioridade': tipoEtiqueta,
-                    'descricao_problema': novoProb,
-                    'observacao_tecnico': "[RETORNO $tipoEtiqueta]: $motivo",
-                    'visualizado_pelo_tecnico': false,
-                  }).eq('id', idNum!);
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black),
+              icon: enviando
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                  : const Icon(Icons.check_circle_rounded, size: 16),
+              label: const Text('Confirmar Despacho', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: enviando
+                  ? null
+                  : () async {
+                      final motivo = motivoC.text.trim();
+                      if (motivo.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Preencha as instruções!')));
+                        return;
+                      }
+                      setD(() => enviando = true);
+                      try {
+                        String novoStatus = 'Em Andamento';
+                        String prioridade = os.prioridade;
 
-                  ServicoNotificacaoOneSignal.enviarNotificacaoOS(
-                    tecnicoLogin: os.tecnicoDesignado,
-                    numeroOS: os.numeroOS,
-                    cliente: os.cliente,
-                    categoria: tipoEtiqueta,
-                  );
+                        if (destinoEscolhido == 'Oficina') {
+                          novoStatus = 'Em Reparo de Bancada';
+                          prioridade = 'Oficina';
+                        } else if (destinoEscolhido == 'Orcamento') {
+                          novoStatus = 'Aguardando Orçamento';
+                        } else if (destinoEscolhido == 'Rua') {
+                          novoStatus = 'Em Andamento';
+                        } else if (destinoEscolhido == 'Faturamento') {
+                          novoStatus = 'Concluída';
+                        }
 
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ ${os.numeroOS} devolvida como $tipoEtiqueta para ${os.tecnicoDesignado}!')),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
-                } finally {
-                  if (ctx.mounted) setD(() => enviando = false);
-                }
-              },
+                        final idNum = int.tryParse(os.id.toString()) ?? os.id;
+                        final novoProb = "${os.descricaoProblema}\n\n⚠️ [DESPACHO ESCRITÓRIO - $destinoEscolhido]: $motivo";
+
+                        await Supabase.instance.client.from('ordens_servico').update({
+                          'status': novoStatus,
+                          'prioridade': prioridade,
+                          'tecnico_designado': tecnicoSel,
+                          'descricao_problema': novoProb,
+                          'observacao_tecnico': "[ESCRITÓRIO -> $destinoEscolhido]: $motivo",
+                          'visualizado_pelo_tecnico': false,
+                        }).eq('id', idNum!);
+
+                        if (destinoEscolhido == 'Faturamento') {
+                          try {
+                            await Supabase.instance.client.from('servicos').insert({
+                              'cliente': os.cliente,
+                              'telefone': os.telefone,
+                              'endereco': os.endereco,
+                              'descricao': "[${os.numeroOS}] $novoProb",
+                              'quantidade': 1,
+                              'valor_unitario': 0.0,
+                              'status': 'Pendente',
+                              'tecnico': tecnicoSel,
+                              'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
+                            });
+                          } catch (_) {}
+                        }
+
+                        ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                          tecnicoLogin: tecnicoSel,
+                          numeroOS: os.numeroOS,
+                          cliente: os.cliente,
+                          categoria: prioridade,
+                        );
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(backgroundColor: Colors.green, content: Text('🚀 O.S. #${os.numeroOS} despachada para $destinoEscolhido!')),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro: $e')));
+                      } finally {
+                        if (ctx.mounted) setD(() => enviando = false);
+                      }
+                    },
             ),
           ],
         ),
@@ -1233,7 +1475,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   itemCount: filtrados.length,
                   itemBuilder: (_, i) {
                     final os = filtrados[i];
-                    return Card(
+                    return InkWell(onTap: () => _modalDetalhesOSAdmin(os), borderRadius: BorderRadius.circular(10), child: Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: Padding(
                         padding: const EdgeInsets.all(10),
