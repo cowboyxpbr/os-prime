@@ -233,8 +233,8 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   // ==========================================================================
   // DEVOLVER A MESMA O.S. AO TÉCNICO COM ITENS SELECIONÁVEIS E VALORES SUPRIMIDOS
   // ==========================================================================
-  void _modalDevolverOSComItens(Map<String, dynamic> orc) async {
-    String tipoExecucao = 'Rua';
+  void _modalDevolverOSComItens(Map<String, dynamic> orc, {String? tipoForcado}) async {
+    String tipoExecucao = tipoForcado ?? 'Rua';
     final String numOS = (orc['numero_os_origem'] != null && orc['numero_os_origem'].toString().trim().isNotEmpty)
         ? orc['numero_os_origem'].toString().trim()
         : (orc['id_os_origem'] != null ? "OS-${orc['id_os_origem']}" : "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}");
@@ -553,16 +553,23 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
           // ==================================================================
           // 3 ABAS: 1. AGUARDANDO ORÇAMENTO (O.S.) | 2. EM ABERTO | 3. APROVADOS
           // ==================================================================
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-            child: Row(
-              children: [
-                _botaoAbaOrcamento('AguardandoOS', "📋 O.S. (${_osAguardandoOrcamento.length})", Colors.orangeAccent),
-                const SizedBox(width: 6),
-                _botaoAbaOrcamento('Aberto', "🟡 Em Aberto (${abertos.length})", Colors.amberAccent),
-                const SizedBox(width: 6),
-                _botaoAbaOrcamento('Aprovado', "🟢 Aprovados (${aprovados.length})", corVerdeWhats),
-              ],
+                    Padding(
+            padding: const EdgeInsets.fromLTRB(6, 8, 6, 4),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _botaoAbaOrcamento('AguardandoOS', "📋 O.S. Aguardando (${_osAguardandoOrcamento.length})", Colors.orangeAccent),
+                  const SizedBox(width: 4),
+                  _botaoAbaOrcamento('Aprovado', "✅ Aprovados (${aprovados.length})", corVerdeWhats),
+                  const SizedBox(width: 4),
+                  _botaoAbaOrcamento('EmAndamento', "🚀 Em Execução", corCianoEletrico),
+                  const SizedBox(width: 4),
+                  _botaoAbaOrcamento('Aberto', "🟡 Em Aberto (${abertos.length})", Colors.amberAccent),
+                  const SizedBox(width: 4),
+                  _botaoAbaOrcamento('Historico', "📚 Histórico", Colors.grey),
+                ],
+              ),
             ),
           ),
 
@@ -843,46 +850,52 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                       ),
-                                                            if (isAprovado)
+                                                                                if (isAprovado)
                       Builder(builder: (ctx) {
                         final bool emOficina = status.contains('Oficina');
                         final bool emRua = status.contains('Rua');
-                        final bool finalizado = status.contains('Finalizado') || status.contains('Faturad');
 
-                        if (finalizado) {
-                          return OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: corVerdeWhats.withOpacity(0.5)),
-                              foregroundColor: corVerdeWhats,
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 1. BOTÃO EXECUÇÃO DE BANCADA (OFICINA)
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: emOficina ? Colors.orangeAccent : Colors.grey.shade800,
+                                foregroundColor: emOficina ? Colors.black : Colors.white70,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              ),
+                              icon: const Icon(Icons.build_circle_rounded, size: 13),
+                              label: Text(emOficina ? '🛠️ Em Bancada' : '🛠️ Bancada', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              onPressed: () {
+                                if (emRua) {
+                                  _confirmarAlteracaoDespacho(orc, 'Oficina');
+                                } else {
+                                  _modalDevolverOSComItens(orc, tipoForcado: 'Oficina');
+                                }
+                              },
                             ),
-                            icon: const Icon(Icons.check_circle, size: 14, color: corVerdeWhats),
-                            label: const Text('Concluído e Faturado', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            onPressed: null,
-                          );
-                        }
-
-                        String rotuloBotao = 'Despachar O.S. (Oficina / Rua)';
-                        Color corBtn = Colors.amberAccent;
-                        if (emOficina) {
-                          rotuloBotao = 'Em Oficina (Despachar Rua)';
-                          corBtn = Colors.orangeAccent;
-                        } else if (emRua) {
-                          rotuloBotao = 'Em Rua (Despachar Oficina)';
-                          corBtn = corCianoEletrico;
-                        }
-
-                        return ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: corBtn,
-                            foregroundColor: Colors.black,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          ),
-                          icon: const Icon(Icons.alt_route_rounded, size: 15),
-                          label: Text(rotuloBotao, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          onPressed: () => _modalDevolverOSComItens(orc),
+                            const SizedBox(width: 4),
+                            // 2. BOTÃO EXECUÇÃO EXTERNA (RUA)
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: emRua ? corCianoEletrico : Colors.grey.shade800,
+                                foregroundColor: emRua ? Colors.black : Colors.white70,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              ),
+                              icon: const Icon(Icons.directions_car_rounded, size: 13),
+                              label: Text(emRua ? '🚗 Em Rua' : '🚗 Rua', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              onPressed: () {
+                                if (emOficina) {
+                                  _confirmarAlteracaoDespacho(orc, 'Rua');
+                                } else {
+                                  _modalDevolverOSComItens(orc, tipoForcado: 'Rua');
+                                }
+                              },
+                            ),
+                          ],
                         );
                       }),
                     const SizedBox(width: 4),

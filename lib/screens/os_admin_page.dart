@@ -270,7 +270,29 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                 ),
                 Text("📄 CPF/CNPJ: ${_mapaDocClientesAdm[os.cliente.trim().toLowerCase()] ?? 'Não informado'}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                 if (os.telefone.isNotEmpty) Text("📞 Telefone: ${os.telefone}", style: const TextStyle(fontSize: 11.5, color: corCianoSuave)),
-                if (os.endereco.isNotEmpty) Text("📍 Endereço: ${os.endereco}", style: const TextStyle(fontSize: 11.5, color: corTextoClaro)),
+                                              if (os.status.toLowerCase().contains('escritório') || os.status.toLowerCase().contains('escritorio'))
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4, bottom: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.orangeAccent, width: 1.2),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.notification_important_rounded, color: Colors.orangeAccent, size: 16),
+                                      SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          '⚠️ AGUARDANDO DECISÃO DO ESCRITÓRIO (DESPACHE O DESTINO)',
+                                          style: TextStyle(color: Colors.orangeAccent, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (os.endereco.isNotEmpty) Text("📍 Endereço: ${os.endereco}", style: const TextStyle(fontSize: 11.5, color: corTextoClaro)),
                 const SizedBox(height: 10),
                 Text("👤 Técnico Designado: ${os.tecnicoDesignado}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corCianoEletrico)),
                 Text("📅 Aberta em: ${os.dataAbertura}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
@@ -637,7 +659,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                 final filtrados = todos.where((os) {
                   final st = os.status.trim().toLowerCase();
                   if (_filtroStatus == 'Pendente') {
-                    if (st != 'pendente') return false;
+                    if (st != 'pendente' && !st.contains('escritório') && !st.contains('escritorio')) return false;
                   } else if (_filtroStatus == 'Em Andamento') {
                     if (st != 'em andamento' && !st.contains('bancada')) return false;
                   } else if (_filtroStatus == 'Concluída') {
@@ -712,6 +734,28 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                                   style: const TextStyle(fontSize: 11, color: corTextoClaro, fontWeight: FontWeight.bold),
                                 ),
                               ),
+                                                            if (os.status.toLowerCase().contains('escritório') || os.status.toLowerCase().contains('escritorio'))
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4, bottom: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.orangeAccent, width: 1.2),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.notification_important_rounded, color: Colors.orangeAccent, size: 16),
+                                      SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          '⚠️ AGUARDANDO DECISÃO DO ESCRITÓRIO (DESPACHE O DESTINO)',
+                                          style: TextStyle(color: Colors.orangeAccent, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               if (os.endereco.isNotEmpty) Text("📍 ${os.endereco}", style: const TextStyle(fontSize: 11, color: corCianoSuave)),
                               if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
                               const SizedBox(height: 4),

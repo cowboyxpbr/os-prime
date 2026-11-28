@@ -1,3 +1,4 @@
+import '../modulo_documentos.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../servico_push.dart';
@@ -1278,7 +1279,7 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
                                     corAmareloSuave,
                                     () => Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (_) => const TelaEmissaoDoc(tipoDoc: 'ORÇAMENTO')),
+                                      MaterialPageRoute(builder: (_) => const TelaListaOrcamentosSalvos()),
                                     ).then((_) => _sincronizar()),
                                   ),
                                 ),
@@ -1361,6 +1362,32 @@ class _TelaMenuPrincipalState extends State<TelaMenuPrincipal> {
           ),
         ],
       ),
+    );
+  }
+
+    Widget _cardCompactoComBadge(String tit, String sub, IconData ic, Color cor, int badgeCount, VoidCallback fn) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _cardCompacto(tit, sub, ic, cor, fn),
+        if (badgeCount > 0)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: Text(
+                badgeCount > 99 ? '99+' : '$badgeCount',
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

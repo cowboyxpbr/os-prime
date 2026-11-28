@@ -549,7 +549,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
   }
 
   // 1. MÉTODO DE CONFIRMAÇÃO DO TIPO DE FATURAMENTO (ÚNICO E OFICIAL)
-  Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
+    Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
     final novoStatus = tipo == 'Nota Fiscal' ? 'Faturado (NF)' : 'Faturado (Recibo)';
     try {
       await supabase.from('servicos').update({
@@ -557,12 +557,30 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
         'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
       }).eq('id', servico['id']).timeout(const Duration(seconds: 15));
 
+      // Sincroniza a tabela ordens_servico para que atualize no celular do técnico!
+      try {
+        final desc = (servico['descricao'] ?? '').toString();
+        final regexOS = RegExp(r'\[(OS-[^\]]+|O\.S\.[^\]]+)\]', caseSensitive: false);
+        final match = regexOS.firstMatch(desc);
+        if (match != null) {
+          final numOS = match.group(1)!;
+          await supabase.from('ordens_servico').update({
+            'status': 'Faturada',
+          }).ilike('numero_os', '%$numOS%');
+        }
+      } catch (_) {}
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: corVerdeWhats,
           content: Text('✅ Serviço faturado via $tipo com sucesso! Movido para Faturados.'),
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
         ));
+
+        // Se for Recibo, já puxa e abre o recibo oficial preenchido na hora!
+        if (tipo == 'Recibo') {
+          _gerarDocDiretoDoServico(servico, 'RECIBO');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -597,10 +615,22 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
       if (confirmar != true) return;
 
       try {
-        await supabase.from('servicos').update({
+                await supabase.from('servicos').update({
           'status': 'Pendente',
           'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
         }).eq('id', servico['id']).timeout(const Duration(seconds: 15));
+
+        try {
+          final desc = (servico['descricao'] ?? '').toString();
+          final regexOS = RegExp(r'\[(OS-[^\]]+|O\.S\.[^\]]+)\]', caseSensitive: false);
+          final match = regexOS.firstMatch(desc);
+          if (match != null) {
+            final numOS = match.group(1)!;
+            await supabase.from('ordens_servico').update({
+              'status': 'Concluída',
+            }).ilike('numero_os', '%$numOS%');
+          }
+        } catch (_) {}
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
