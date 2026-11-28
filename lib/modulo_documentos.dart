@@ -234,6 +234,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
   // DEVOLVER A MESMA O.S. AO TÉCNICO COM ITENS SELECIONÁVEIS E VALORES SUPRIMIDOS
   // ==========================================================================
   void _modalDevolverOSComItens(Map<String, dynamic> orc) async {
+    String tipoExecucao = 'Rua';
     final String numOS = (orc['numero_os_origem'] != null && orc['numero_os_origem'].toString().trim().isNotEmpty)
         ? orc['numero_os_origem'].toString().trim()
         : (orc['id_os_origem'] != null ? "OS-${orc['id_os_origem']}" : "OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}");
