@@ -107,6 +107,83 @@ class TelaListaOrcamentosSalvos extends StatefulWidget {
 }
 
 class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
+  void _modalDetalhesOrcamentoCompleto(Map<String, dynamic> orc) {
+    final moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R$');
+    final double total = (orc['valor_total'] is num) ? (orc['valor_total'] as num).toDouble() : 0.0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: corCardFundo,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: corCianoEletrico, width: 1.2),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Orçamento #${orc['id'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amberAccent)),
+                    Text(orc['data'] ?? '', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(orc['cliente_nome'] ?? 'Cliente sem nome', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: corTextoClaro)),
+                if (orc['cliente_telefone'] != null && orc['cliente_telefone'].toString().isNotEmpty)
+                  Text("📞 Telefone: ${orc['cliente_telefone']}", style: const TextStyle(fontSize: 11.5, color: corCianoSuave)),
+                if (orc['cliente_endereco'] != null && orc['cliente_endereco'].toString().isNotEmpty)
+                  Text("📍 Endereço: ${orc['cliente_endereco']}", style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+                const SizedBox(height: 10),
+                const Text("Itens / Peças / Serviços:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corCianoEletrico)),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(8)),
+                  child: Text(orc['descricao_itens'] ?? 'Nenhum item listado', style: const TextStyle(fontSize: 12.5, color: corTextoClaro)),
+                ),
+                if (orc['laudo_descritivo'] != null && orc['laudo_descritivo'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  const Text("Parecer / Laudo Técnico:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corVerdeWhats)),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0x2625D366), borderRadius: BorderRadius.circular(8)),
+                    child: Text(orc['laudo_descritivo'], style: const TextStyle(fontSize: 12, color: corVerdeWhats)),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('VALOR TOTAL:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    Text(moeda.format(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: corCianoEletrico)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.grey)),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Fechar Detalhes', style: TextStyle(color: Colors.white70)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   // Confirmação para alternar etapa caso outra já esteja despachada
   void _confirmarAlteracaoDespacho(Map<String, dynamic> orc, String novoDestino) {
     showDialog(
@@ -657,9 +734,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: Colors.orangeAccent, width: 1.2)),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
+          child: InkWell(onTap: () => _modalDetalhesOrcamentoCompleto(orc), borderRadius: BorderRadius.circular(12), child: Padding(padding: const EdgeInsets.all(12), child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -765,9 +840,7 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(color: isAprovado ? corVerdeWhats.withAlpha(90) : Colors.amberAccent.withAlpha(80)),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
+          child: InkWell(onTap: () => _modalDetalhesOrcamentoCompleto(orc), borderRadius: BorderRadius.circular(12), child: Padding(padding: const EdgeInsets.all(12), child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
