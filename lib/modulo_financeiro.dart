@@ -43,7 +43,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     final fmt = DateFormat('dd/MM/yyyy');
     for (var s in lista) {
       final id = s['id'];
-      if (id != null && !_processadosLimpeza.contains(id) && (s['status'] == 'Faturado' || s['status'] == 'Quitado') && s['data'] != null) {
+      if (id != null && !_processadosLimpeza.contains(id) && (s['status'] == 'Faturado' || s['status'] == 'Quitado' || s['status'].toString().startsWith('Faturado')) && s['data'] != null) {
         _processadosLimpeza.add(id);
         try {
           if (hoje.difference(fmt.parse(s['data'].toString())).inDays >= 20) {
@@ -151,9 +151,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     );
   }
 
-  // ==========================================================================
-  // VOLTAR O.S. (LIBERADO PARA SPAZIO, ATLANTIC E QUALQUER SERVIÇO PENDENTE)
-  // ==========================================================================
   void _modalDevolverOS(Map<String, dynamic> servico) async {
     final desc = (servico['descricao'] ?? '').toString();
     final regexOS = RegExp(r'\[(OS-[^\]]+|O\.S\.[^\]]+)\]', caseSensitive: false);
@@ -208,17 +205,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                 if (servico['endereco'] != null && servico['endereco'].toString().isNotEmpty)
                   Text("📍 ${servico['endereco']}", style: const TextStyle(fontSize: 10.5, color: Colors.grey)),
                 const SizedBox(height: 10),
-                const Text('Selecione o Funcionário que Recebe:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corCianoEletrico)),
-                const SizedBox(height: 4),
-                DropdownButtonFormField<String>(
-                  value: tecnicoSel,
-                  dropdownColor: const Color(0xFF142030),
-                  decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                  items: tecnicosDisponiveis.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
-                  onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
-                ),
-                const SizedBox(height: 10),
-                                const SizedBox(height: 10),
                 const Text('DESTINO DA O.S. DEVOLVIDA:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corCianoEletrico)),
                 const SizedBox(height: 4),
                 Wrap(
@@ -238,6 +224,17 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                const Text('Selecione o Funcionário que Recebe:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corCianoEletrico)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  value: tecnicoSel,
+                  dropdownColor: const Color(0xFF142030),
+                  decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                  items: tecnicosDisponiveis.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
+                  onChanged: (v) => setD(() => tecnicoSel = v ?? tecnicoSel),
+                ),
+                const SizedBox(height: 10),
                 const Text('Tipo de Retorno:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
                 const SizedBox(height: 4),
                 Wrap(
@@ -260,7 +257,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   maxLines: 5,
                   decoration: const InputDecoration(
                     labelText: 'Instruções para o Técnico *',
-                    hintText: 'Explique o que o técnico precisa executar no local...',
+                    hintText: 'Explique o que o técnico precisa executar...',
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -288,9 +285,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                     'endereco': servico['endereco'] ?? '',
                     'descricao_problema': "⚠️ [$tipoEtiqueta - $numOS]: $motivo\nServiço original: ${servico['descricao'] ?? ''}".trim(),
                     'tecnico_designado': tecnicoSel,
-                    'prioridade': tipoEtiqueta,
+                    'prioridade': destinoOSDevolvida == 'Oficina' ? 'Oficina' : tipoEtiqueta,
                     'status': destinoOSDevolvida == 'Oficina' ? 'Em Reparo de Bancada' : 'Em Andamento',
-                      'prioridade': destinoOSDevolvida == 'Oficina' ? 'Oficina' : tipoEtiqueta,
                     'data_abertura': DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
                     'visualizado_pelo_tecnico': false,
                   };
@@ -305,17 +301,25 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                     await supabase.from('servicos').delete().eq('id', servico['id']);
                   }
 
-                  ServicoNotificacaoOneSignal.enviarNotificacaoOS(
-                    tecnicoLogin: tecnicoSel,
-                    numeroOS: numOS,
-                    cliente: servico['cliente'] ?? '',
-                    categoria: tipoEtiqueta,
-                  );
+                  if (destinoOSDevolvida == 'Oficina') {
+                    ServicoNotificacaoOneSignal.enviarNotificacaoOficina(
+                      tecnicoLogin: tecnicoSel,
+                      numeroOS: numOS,
+                      cliente: servico['cliente'] ?? '',
+                    );
+                  } else {
+                    ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                      tecnicoLogin: tecnicoSel,
+                      numeroOS: numOS,
+                      cliente: servico['cliente'] ?? '',
+                      categoria: tipoEtiqueta,
+                    );
+                  }
 
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ $numOS enviada para $tecnicoSel executar como $tipoEtiqueta!')),
+                      SnackBar(backgroundColor: Colors.orange.shade800, content: Text('↩️ $numOS enviada para $tecnicoSel na $destinoOSDevolvida!')),
                     );
                   }
                 } catch (e) {
@@ -332,14 +336,11 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     );
   }
 
-  // ==========================================================================
-  // TELA CHEIA AMPLA (Dialog.fullscreen) COM AS 3 OPÇÕES DE FATURAMENTO
-  // ==========================================================================
   void _modalGerenciarItensDoServico(Map<String, dynamic> servico) {
     final num valorTotalOriginal = servico['valor_unitario'] is num ? servico['valor_unitario'] : 0;
     final List<ItemServico> itens = _converterDescricaoEmItens(servico['descricao']?.toString() ?? '', valorTotalOriginal);
     String situacaoFaturamento = (servico['status'] ?? 'Emitir NF').toString().trim();
-    if (situacaoFaturamento != 'Emitir NF' && situacaoFaturamento != 'Emitir Recibo' && situacaoFaturamento != 'Aguardando Parcela' && situacaoFaturamento != 'Faturado') {
+    if (situacaoFaturamento != 'Emitir NF' && situacaoFaturamento != 'Emitir Recibo' && situacaoFaturamento != 'Aguardando Parcela' && !situacaoFaturamento.startsWith('Faturado')) {
       situacaoFaturamento = 'Emitir NF';
     }
     bool salvando = false;
@@ -547,29 +548,8 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     );
   }
 
-    Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
-    final novoStatus = tipo == 'Nota Fiscal' ? 'Faturado (NF)' : 'Faturado (Recibo)';
-    try {
-      await supabase.from('servicos').update({
-        'status': novoStatus,
-        'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
-      }).eq('id', servico['id']).timeout(const Duration(seconds: 15));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: corVerdeWhats,
-          content: Text('✅ Serviço faturado via $tipo com sucesso! Movido para Faturados.'),
-          duration: const Duration(seconds: 3),
-        ));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao faturar: $e')));
-      }
-    }
-  }
-
-    Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
+  // 1. MÉTODO DE CONFIRMAÇÃO DO TIPO DE FATURAMENTO (ÚNICO E OFICIAL)
+  Future<void> _confirmarFaturamentoComTipo(Map<String, dynamic> servico, String tipo) async {
     final novoStatus = tipo == 'Nota Fiscal' ? 'Faturado (NF)' : 'Faturado (Recibo)';
     try {
       await supabase.from('servicos').update({
@@ -595,7 +575,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
     final st = (servico['status'] ?? '').toString().trim();
     final bool estaFaturado = st == 'Faturado' || st == 'Quitado' || st.startsWith('Faturado');
 
-    // 1. SE JÁ ESTIVER FATURADO -> PERGUNTA SE DESEJA REVERTER PARA PENDENTE
     if (estaFaturado) {
       final confirmar = await showDialog<bool>(
         context: context,
@@ -636,7 +615,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
       return;
     }
 
-    // 2. SE ESTIVER PENDENTE -> ABRE AS 2 OPÇÕES: FATURAR VIA RECIBO OU VIA NOTA FISCAL
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -658,7 +636,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
             const Text('Selecione o formato de faturamento:', style: TextStyle(color: Colors.grey, fontSize: 12)),
             const SizedBox(height: 10),
 
-            // OPÇÃO A: VIA RECIBO
             InkWell(
               onTap: () async {
                 Navigator.pop(ctx);
@@ -693,7 +670,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
             ),
             const SizedBox(height: 10),
 
-            // OPÇÃO B: VIA NOTA FISCAL
             InkWell(
               onTap: () async {
                 Navigator.pop(ctx);
@@ -717,7 +693,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('📄 Faturar via Nota Fiscal', style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text('Move para Faturados até a integração da NF', style: TextStyle(color: Colors.grey, fontSize: 10.5)),
+                          Text('Move para Faturados até a emissão da NF', style: TextStyle(color: Colors.grey, fontSize: 10.5)),
                         ],
                       ),
                     ),
@@ -749,7 +725,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
       final total = q * v;
       final st = (s['status'] ?? '').toString().trim();
 
-      if (st == 'Faturado' || st == 'Quitado') {
+      if (st == 'Faturado' || st == 'Quitado' || st.startsWith('Faturado')) {
         totalFaturado += total;
         qtdFaturados++;
       } else {
@@ -874,7 +850,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                 subtitle: const Text("Apenas serviços aguardando faturamento", style: TextStyle(fontSize: 11, color: Colors.grey)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _gerarRelatorioPdf('A Faturar (Pendentes)', todosServicos.where((s) => s['status'] != 'Faturado' && s['status'] != 'Quitado').toList());
+                  _gerarRelatorioPdf('A Faturar (Pendentes)', todosServicos.where((s) => s['status'] != 'Faturado' && s['status'] != 'Quitado' && !s['status'].toString().startsWith('Faturado')).toList());
                 },
               ),
               ListTile(
@@ -884,7 +860,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                 subtitle: const Text("Apenas serviços já recebidos", style: TextStyle(fontSize: 11, color: Colors.grey)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _gerarRelatorioPdf('Faturados', todosServicos.where((s) => s['status'] == 'Faturado' || s['status'] == 'Quitado').toList());
+                  _gerarRelatorioPdf('Faturados', todosServicos.where((s) => s['status'] == 'Faturado' || s['status'] == 'Quitado' || s['status'].toString().startsWith('Faturado')).toList());
                 },
               ),
               ListTile(
@@ -984,7 +960,7 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                   final num val = s['valor_unitario'] is num ? s['valor_unitario'] : 0;
                   final t = qtd * val;
                   final st = (s['status'] ?? '').toString().trim();
-                  if (st == 'Faturado' || st == 'Quitado') {
+                  if (st == 'Faturado' || st == 'Quitado' || st.startsWith('Faturado')) {
                     totalFaturado += t;
                   } else {
                     totalPendente += t;
@@ -1233,7 +1209,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                           scrollDirection: Axis.horizontal,
                                           child: Row(
                                             children: [
-                                              // 1. BOTAO EDITAR ($) - SUPRIMIDO SE JA ESTIVER FATURADO!
                                               if (!fat) ...[
                                                 OutlinedButton.icon(
                                                   style: OutlinedButton.styleFrom(
@@ -1248,9 +1223,6 @@ class _TelaFaturamentoState extends State<TelaFaturamento> {
                                                   onPressed: () => _modalGerenciarItensDoServico(s),
                                                 ),
                                                 const SizedBox(width: 4),
-                                              ],
-                                              // 2. BOTAO O.S. (VOLTAR O.S.) - LIBERADO PARA TODOS OS SERVICOS PENDENTES (INCLUSIVE SPAZIO E ATLANTIC)
-                                              if (!fat) ...[
                                                 OutlinedButton.icon(
                                                   style: OutlinedButton.styleFrom(
                                                     side: const BorderSide(color: Colors.orangeAccent, width: 1),

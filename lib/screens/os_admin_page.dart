@@ -1,6 +1,6 @@
 // ============================================================================
-// GESTÃO DE O.S. (ADMIN): DESPACHO DIRETO, SEM OPÇÃO GERAL, BUSCA E PUSH ONESIGNAL
-// lib/screens/os_admin_page.dart (VERSÃO OFICIAL: O.S. Prime)
+// GESTÃO DE O.S. (ADMIN): DESPACHO DIRETO, 1 CLIQUE DETALHES, ALTERAR CLIENTE
+// lib/screens/os_admin_page.dart (VERSÃO OFICIAL)
 // ============================================================================
 
 import 'package:flutter/material.dart';
@@ -18,6 +18,141 @@ class TelaOSAdmin extends StatefulWidget {
 }
 
 class _TelaOSAdminState extends State<TelaOSAdmin> {
+  final Map<String, String> _mapaDocClientesAdm = {};
+
+  Future<void> _carregarDocsSupabaseAdm() async {
+    try {
+      final locais = await CacheOffline.carregarClientesLocal();
+      for (final c in locais) {
+        if (c.nome.trim().isNotEmpty && c.documento.trim().isNotEmpty) {
+          _mapaDocClientesAdm[c.nome.trim().toLowerCase()] = c.documento.trim();
+        }
+      }
+      final res = await supabase.from('clientes').select('nome, cpf_cnpj');
+      for (final c in res) {
+        final n = (c['nome'] ?? '').toString().trim().toLowerCase();
+        final d = (c['cpf_cnpj'] ?? '').toString().trim();
+        if (n.isNotEmpty && d.isNotEmpty) _mapaDocClientesAdm[n] = d;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  String? _extrairAtendente(String desc) {
+    if (!desc.contains('[Atender no Local:')) return null;
+    try {
+      return desc.split('[Atender no Local:').last.split(']').first.trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<DadosCliente> _listaClientesCache = [];
+  Future<void> _carregarClientesCache() async {
+    try {
+      final locais = await CacheOffline.carregarClientesLocal();
+      if (mounted) setState(() => _listaClientesCache = locais);
+      final res = await supabase.from('clientes').select().timeout(const Duration(seconds: 10));
+      if (res.isNotEmpty) {
+        final remotos = (res as List).map((m) => DadosCliente.fromMap(Map<String, dynamic>.from(m))).toList();
+        if (mounted) setState(() => _listaClientesCache = remotos);
+      }
+    } catch (_) {}
+  }
+
+  late final Stream<List<Map<String, dynamic>>> _stream;
+  List<OrdemServico> _offlineOS = [];
+  List<UsuarioApp> _tecnicos = [];
+  String _filtroStatus = 'Todas';
+  String _filtroPesquisa = '';
+  bool _mostrarBusca = false;
+
+  List<UsuarioApp> get _tecnicosDeCampo =>
+      _tecnicos.where((u) => !u.isMaster && u.usuario.trim().toLowerCase() != 'admin').toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = Supabase.instance.client
+        .from('ordens_servico')
+        .stream(primaryKey: ['id'])
+        .order('id', ascending: false);
+    _carregarOfflineETecnicos();
+    _carregarDocsSupabaseAdm();
+    _executarLimpezaInicial();
+  }
+
+  Future<void> _carregarOfflineETecnicos() async {
+    final locais = await ServicoOS.carregarLocal();
+    try {
+      final res = await Supabase.instance.client.from('usuarios').select().order('nome');
+      _tecnicos = res.map((m) => UsuarioApp.fromMap(m)).toList();
+    } catch (_) {
+      _tecnicos = await CacheOffline.carregarUsuariosLocais();
+    }
+    _carregarClientesCache();
+    if (mounted) {
+      setState(() => _offlineOS = locais);
+    }
+  }
+
+  Future<void> _executarLimpezaInicial() async {
+    try {
+      final res = await Supabase.instance.client.from('ordens_servico').select();
+      final lista = (res as List).map((m) => OrdemServico.fromMap(m)).toList();
+      _limparOSAntigas90Dias(lista);
+    } catch (_) {}
+  }
+
+  void _limparOSAntigas90Dias(List<OrdemServico> lista) {
+    final hoje = DateTime.now();
+    final fmt = DateFormat('dd/MM/yyyy');
+    for (var os in lista) {
+      if (os.id != null && os.dataAbertura.isNotEmpty) {
+        try {
+          final dataLimpa = os.dataAbertura.split('•')[0].trim();
+          final dt = fmt.parse(dataLimpa);
+          if (hoje.difference(dt).inDays >= 90) {
+            Supabase.instance.client.from('ordens_servico').delete().eq('id', os.id!).then((_) {});
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  Color _corPrioridade(String prioridade) {
+    switch (prioridade.toLowerCase()) {
+      case 'emergência':
+      case 'emergencia':
+        return Colors.redAccent;
+      case 'urgente':
+        return Colors.orangeAccent;
+      case 'plantão':
+      case 'plantao':
+        return Colors.purpleAccent;
+      default:
+        return corCianoEletrico;
+    }
+  }
+
+  Color _corStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'concluída':
+      case 'concluida':
+        return corVerdeWhats;
+      case 'em andamento':
+        return Colors.amberAccent;
+      case 'em reparo de bancada':
+        return Colors.orangeAccent;
+      case 'aguardando orçamento':
+        return Colors.orangeAccent;
+      case 'faturada':
+        return const Color(0xFF00E5FF);
+      default:
+        return corCianoSuave;
+    }
+  }
+
   void _modalAlterarClienteOS(OrdemServico os) {
     final novoNomeCtrl = TextEditingController(text: os.cliente);
     final novoFoneCtrl = TextEditingController(text: os.telefone);
@@ -42,7 +177,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Substitua o nome genérico ou selecione o cliente real:", style: TextStyle(color: Colors.grey, fontSize: 11.5)),
+                const Text("Substitua o nome genérico pelo cliente real:", style: TextStyle(color: Colors.grey, fontSize: 11.5)),
                 const SizedBox(height: 12),
                 TextField(controller: novoNomeCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Nome do Cliente / Condomínio *', isDense: true)),
                 const SizedBox(height: 8),
@@ -188,935 +323,10 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
       ),
     );
   }
-  final Map<String, String> _mapaDocClientesAdm = {};
 
-  Future<void> _carregarDocsSupabaseAdm() async {
-    try {
-      final locais = await CacheOffline.carregarClientesLocal();
-      for (final c in locais) {
-        if (c.nome.trim().isNotEmpty && c.documento.trim().isNotEmpty) {
-          _mapaDocClientesAdm[c.nome.trim().toLowerCase()] = c.documento.trim();
-        }
-      }
-      final res = await supabase.from('clientes').select('nome, cpf_cnpj');
-      for (final c in res) {
-        final n = (c['nome'] ?? '').toString().trim().toLowerCase();
-        final d = (c['cpf_cnpj'] ?? '').toString().trim();
-        if (n.isNotEmpty && d.isNotEmpty) _mapaDocClientesAdm[n] = d;
-      }
-      if (mounted) setState(() {});
-    } catch (_) {}
-  }
-
-  String? _extrairAtendente(String desc) {
-    if (!desc.contains('[Atender no Local:')) return null;
-    try {
-      return desc.split('[Atender no Local:').last.split(']').first.trim();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String? _extrairFoneAtendente(String desc) {
-    final atendente = _extrairAtendente(desc);
-    if (atendente == null) return null;
-    final nums = atendente.replaceAll(RegExp(r'[^\d]'), '');
-    return nums.length >= 8 ? nums : null;
-  }
-  List<DadosCliente> _listaClientesCache = [];
-  Future<void> _carregarClientesCache() async {
-    try {
-      final locais = await CacheOffline.carregarClientesLocal();
-      if (mounted) setState(() => _listaClientesCache = locais);
-      final res = await supabase.from('clientes').select().timeout(const Duration(seconds: 10));
-      if (res.isNotEmpty) {
-        final remotos = (res as List).map((m) => DadosCliente.fromMap(Map<String, dynamic>.from(m))).toList();
-        if (mounted) setState(() => _listaClientesCache = remotos);
-      }
-    } catch (_) {}
-  }
-
-  String _buscarDocCliente(String nomeCliente) {
-    if (nomeCliente.trim().isEmpty) return 'Não informado';
-    final n = nomeCliente.trim().toLowerCase();
-    try {
-      final cli = _listaClientesCache.where((c) =>
-        c.nome.trim().toLowerCase() == n ||
-        n.contains(c.nome.trim().toLowerCase()) ||
-        c.nome.trim().toLowerCase().contains(n)
-      ).firstOrNull;
-      if (cli != null && cli.documento.trim().isNotEmpty) return cli.documento.trim();
-    } catch (_) {}
-    return 'Não informado';
-  }
-  late final Stream<List<Map<String, dynamic>>> _stream;
-  List<OrdemServico> _offlineOS = [];
-  List<UsuarioApp> _tecnicos = [];
-  String _filtroStatus = 'Todas';
-  String _filtroPesquisa = '';
-  bool _mostrarBusca = false;
-
-  // Filtro estrito: apenas técnicos reais e sêniors (remove masters da escala de campo)
-  List<UsuarioApp> get _tecnicosDeCampo =>
-      _tecnicos.where((u) => !u.isMaster && u.usuario.trim().toLowerCase() != 'admin').toList();
-
-  @override
-  void initState() {
-    super.initState();
-    _stream = Supabase.instance.client
-        .from('ordens_servico')
-        .stream(primaryKey: ['id'])
-        .order('id', ascending: false);
-    _carregarOfflineETecnicos();
-    _carregarDocsSupabaseAdm();
-    _executarLimpezaInicial();
-  }
-
-  Future<void> _carregarOfflineETecnicos() async {
-    final locais = await ServicoOS.carregarLocal();
-    try {
-      final res = await Supabase.instance.client.from('usuarios').select().order('nome');
-      _tecnicos = res.map((m) => UsuarioApp.fromMap(m)).toList();
-    } catch (_) {
-      _tecnicos = await CacheOffline.carregarUsuariosLocais();
-    }
-    _carregarClientesCache();
-    if (mounted) {
-      setState(() => _offlineOS = locais);
-    }
-  }
-
-  Future<void> _executarLimpezaInicial() async {
-    try {
-      final res = await Supabase.instance.client.from('ordens_servico').select();
-      final lista = (res as List).map((m) => OrdemServico.fromMap(m)).toList();
-      _limparOSAntigas90Dias(lista);
-    } catch (_) {}
-  }
-
-  void _limparOSAntigas90Dias(List<OrdemServico> lista) {
-    final hoje = DateTime.now();
-    final fmt = DateFormat('dd/MM/yyyy');
-    for (var os in lista) {
-      if (os.id != null && os.dataAbertura.isNotEmpty) {
-        try {
-          final dataLimpa = os.dataAbertura.split('•')[0].trim();
-          final dt = fmt.parse(dataLimpa);
-          if (hoje.difference(dt).inDays >= 90) {
-            Supabase.instance.client.from('ordens_servico').delete().eq('id', os.id!).then((_) {});
-          }
-        } catch (_) {}
-      }
-    }
-  }
-
-  Color _corPrioridade(String prioridade) {
-    switch (prioridade.toLowerCase()) {
-      case 'emergência':
-      case 'emergencia':
-        return Colors.redAccent;
-      case 'urgente':
-        return Colors.orangeAccent;
-      case 'plantão':
-      case 'plantao':
-        return Colors.purpleAccent;
-      default:
-        return corCianoEletrico;
-    }
-  }
-
-  Color _corStatus(String status) {
-    switch (status.toLowerCase()) {
-      case 'concluída':
-      case 'concluida':
-        return corVerdeWhats;
-      case 'em andamento':
-        return Colors.amberAccent;
-      case 'faturada':
-        return const Color(0xFF00E5FF);
-      default:
-        return corCianoSuave;
-    }
-  }
-
-  Future<void> _gerarDocOS(OrdemServico os, String acao) async {
-    try {
-      final clienteObj = DadosCliente(
-        nome: os.cliente,
-        telefone: os.telefone,
-        endereco: os.endereco,
-      );
-
-      final relatorioTec = (os.observacaoTecnico != null && os.observacaoTecnico!.isNotEmpty)
-          ? '\n\nRelatório de Execução:\n${os.observacaoTecnico}'
-          : '';
-
-      final f = await PdfEngine.apenasGerarPdf(
-        tipoDoc: 'ORDEM DE SERVIÇO',
-        cliente: clienteObj,
-        destaque: 'ORDEM DE SERVIÇO - ${os.numeroOS}',
-        itens: [
-          ItemServico(
-            descricao: '${os.descricaoProblema}$relatorioTec',
-            quantidade: 1,
-            valorUnitario: 0.0,
-          ),
-        ],
-        obs: 'Prioridade: ${os.prioridade.toUpperCase()} | Técnico: ${os.tecnicoDesignado} | Aberta em: ${os.dataAbertura}',
-      );
-
-      if (acao == 'imprimir') {
-        await Share.shareXFiles([XFile(f.path)], text: 'Imprimir O.S. ${os.numeroOS}');
-      } else if (acao == 'whats') {
-        await Share.shareXFiles(
-          [XFile(f.path)],
-          text: 'Olá! Segue O.S. *${os.numeroOS}* - ${os.cliente}\nPrioridade: ${os.prioridade} | Status: ${os.status}',
-        );
-      } else {
-        await Share.shareXFiles([XFile(f.path)], text: 'O.S. ${os.numeroOS} - ${os.cliente}');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro O.S.: $e')));
-      }
-    }
-  }
-
-  void _modalSuperRelatorio(List<OrdemServico> todasOS) {
-    String periodoSel = 'Mês Atual';
-    String tecnicoSel = 'Todos';
-    String prioridadeSel = 'Todas';
-    String statusSel = 'Todas';
-    bool gerandoRelatorio = false;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: corCardFundo,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20)), side: BorderSide(color: corCianoEletrico)),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setR) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.analytics_rounded, color: corCianoEletrico, size: 22),
-                      SizedBox(width: 8),
-                      Text('Relatório Gerencial de O.S.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: corCianoEletrico)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('Período de Análise:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: corCianoSuave)),
-                  const SizedBox(height: 4),
-                  DropdownButtonFormField<String>(
-                    value: periodoSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                    items: const [
-                      DropdownMenuItem(value: 'Hoje', child: Text('Hoje')),
-                      DropdownMenuItem(value: 'Mês Atual', child: Text('Mês Atual')),
-                      DropdownMenuItem(value: 'Trimestre (90 Dias)', child: Text('Trimestre (Últimos 90 Dias)')),
-                      DropdownMenuItem(value: 'Completo (Todas)', child: Text('Completo (Todas as Datas)')),
-                    ],
-                    onChanged: (v) => setR(() => periodoSel = v ?? 'Mês Atual'),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text('Filtrar por Responsável:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: corCianoSuave)),
-                  const SizedBox(height: 4),
-                  DropdownButtonFormField<String>(
-                    value: tecnicoSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                    items: [
-                      const DropdownMenuItem(value: 'Todos', child: Text('Todos os Responsáveis')),
-                      ..._tecnicosDeCampo.map((u) {
-                        String label = u.nome;
-                        if (u.isSenior) label += ' (⭐ Sênior)';
-                        return DropdownMenuItem(value: u.nome, child: Text(label));
-                      }),
-                    ],
-                    onChanged: (v) => setR(() => tecnicoSel = v ?? 'Todos'),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Prioridade:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: corCianoSuave)),
-                            const SizedBox(height: 4),
-                            DropdownButtonFormField<String>(
-                              value: prioridadeSel,
-                              dropdownColor: corCardFundo,
-                              decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
-                              items: const [
-                                DropdownMenuItem(value: 'Todas', child: Text('Todas')),
-                                DropdownMenuItem(value: 'Normal', child: Text('Normal/Padrão')),
-                                DropdownMenuItem(value: 'Urgente', child: Text('Urgente')),
-                                DropdownMenuItem(value: 'Emergência', child: Text('Emergência')),
-                                DropdownMenuItem(value: 'Plantão', child: Text('🚨 Plantão')),
-                              ],
-                              onChanged: (v) => setR(() => prioridadeSel = v ?? 'Todas'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Status da O.S.:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: corCianoSuave)),
-                            const SizedBox(height: 4),
-                            DropdownButtonFormField<String>(
-                              value: statusSel,
-                              dropdownColor: corCardFundo,
-                              decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
-                              items: const [
-                                DropdownMenuItem(value: 'Todas', child: Text('Todas')),
-                                DropdownMenuItem(value: 'Pendente', child: Text('Abertas/Pendentes')),
-                                DropdownMenuItem(value: 'Em Andamento', child: Text('Em Andamento')),
-                                DropdownMenuItem(value: 'Concluída', child: Text('Concluídas')),
-                                DropdownMenuItem(value: 'Faturada', child: Text('Faturadas')),
-                              ],
-                              onChanged: (v) => setR(() => statusSel = v ?? 'Todas'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 10)),
-                          icon: gerandoRelatorio
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                              : const Icon(Icons.picture_as_pdf, size: 16),
-                          label: const Text('Gerar Relatório PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                          onPressed: gerandoRelatorio ? null : () => _processarRelatorio(todasOS, periodoSel, tecnicoSel, prioridadeSel, statusSel, false, ctx, setR),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F242C), foregroundColor: Colors.amberAccent, side: const BorderSide(color: Colors.amberAccent), padding: const EdgeInsets.symmetric(vertical: 10)),
-                          icon: const Icon(Icons.print, size: 16),
-                          label: const Text('Imprimir Direto', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                          onPressed: gerandoRelatorio ? null : () => _processarRelatorio(todasOS, periodoSel, tecnicoSel, prioridadeSel, statusSel, true, ctx, setR),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _processarRelatorio(
-    List<OrdemServico> todas,
-    String periodo,
-    String tecnico,
-    String prioridade,
-    String status,
-    bool imprimir,
-    BuildContext bCtx,
-    StateSetter setR,
-  ) async {
-    setR(() => true);
-    final hoje = DateTime.now();
-    final fmt = DateFormat('dd/MM/yyyy');
-
-    final filtradas = todas.where((os) {
-      if (tecnico != 'Todos' && !os.tecnicoDesignado.toLowerCase().contains(tecnico.toLowerCase())) return false;
-      if (prioridade != 'Todas' && os.prioridade.toLowerCase() != prioridade.toLowerCase()) return false;
-      if (status != 'Todas' && os.status.toLowerCase() != status.toLowerCase()) return false;
-
-      if (periodo != 'Completo (Todas)' && os.dataAbertura.isNotEmpty) {
-        try {
-          final dt = fmt.parse(os.dataAbertura.split('•')[0].trim());
-          if (periodo == 'Hoje' && (dt.day != hoje.day || dt.month != hoje.month || dt.year != hoje.year)) return false;
-          if (periodo == 'Mês Atual' && (dt.month != hoje.month || dt.year != hoje.year)) return false;
-          if (periodo == 'Trimestre (90 Dias)' && hoje.difference(dt).inDays > 90) return false;
-        } catch (_) {}
-      }
-      return true;
-    }).toList();
-
-    if (filtradas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Nenhuma O.S. encontrada para os filtros selecionados.')));
-      return;
-    }
-
-    final listaFormatada = filtradas.map((os) => {
-      'cliente': os.cliente,
-      'data': os.dataAbertura,
-      'descricao': '[${os.numeroOS} - ${os.prioridade.toUpperCase()}] ${os.descricaoProblema}',
-      'tecnico': os.tecnicoDesignado,
-      'status': os.status,
-      'quantidade': 1,
-      'valor_unitario': 0.0,
-    }).toList();
-
-    try {
-      final f = await PdfEngine.gerarRelatorioFaturamentoPdf(
-        tipoRelatorio: 'Relatório Gerencial de O.S. ($periodo)',
-        servicos: listaFormatada,
-      );
-      if (bCtx.mounted) Navigator.pop(bCtx);
-      await Share.shareXFiles([XFile(f.path)], text: imprimir ? 'Imprimir Relatório de O.S.' : 'Relatório de Ordens de Serviço');
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro relatório: $e')));
-    }
-  }
-
-  void _cadastrarNovoClienteParaOS(
-    TextEditingController cC,
-    TextEditingController eC,
-    TextEditingController fC,
-    StateSetter setM,
-  ) {
-    final nomeCtrl = TextEditingController();
-    final foneCtrl = TextEditingController();
-    final endCtrl = TextEditingController();
-    final docCtrl = TextEditingController();
-    bool salvando = false;
-
-    showDialog(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: corCardFundo,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: corCianoEletrico),
-          ),
-          title: const Text('👤 Cadastrar Novo Cliente', style: TextStyle(color: corCianoEletrico, fontSize: 16, fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nomeCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Nome do Cliente / Condomínio *', isDense: true)),
-                const SizedBox(height: 8),
-                TextField(controller: foneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone / WhatsApp *', isDense: true)),
-                const SizedBox(height: 8),
-                TextField(controller: endCtrl, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Endereço Completo', isDense: true)),
-                const SizedBox(height: 8),
-                TextField(controller: docCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'CPF ou CNPJ (Opcional)', isDense: true)),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: salvando ? null : () => Navigator.pop(ctx),
-              child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
-              onPressed: salvando ? null : () async {
-                final nome = nomeCtrl.text.trim();
-                final fone = foneCtrl.text.trim();
-                final endereco = endCtrl.text.trim();
-                final doc = docCtrl.text.trim();
-
-                if (nome.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Informe o nome do cliente.')));
-                  return;
-                }
-
-                setDialogState(() => salvando = true);
-
-                // 1. Preenche os campos da O.S. imediatamente
-                setM(() {
-                  cC.text = nome;
-                  fC.text = fone;
-                  eC.text = endereco;
-                });
-
-                String idGerado = DateTime.now().millisecondsSinceEpoch.toString();
-
-                // 2. Tenta gravar no Supabase convertendo o id para String com seguranca
-                try {
-                  final res = await supabase.from('clientes').insert({
-                    'nome': nome,
-                    'telefone': fone,
-                    'endereco': endereco,
-                    'cpf_cnpj': doc,
-                    'documento': doc,
-                  }).select().maybeSingle().timeout(const Duration(seconds: 5));
-                  if (res != null && res['id'] != null) {
-                    idGerado = res['id'].toString();
-                  }
-                } catch (_) {
-                  try {
-                    final res2 = await supabase.from('clientes').insert({
-                      'nome': nome,
-                      'telefone': fone,
-                      'endereco': endereco,
-                    }).select().maybeSingle().timeout(const Duration(seconds: 4));
-                    if (res2 != null && res2['id'] != null) {
-                      idGerado = res2['id'].toString();
-                    }
-                  } catch (_) {}
-                }
-
-                // 3. Salva no cache local do aparelho
-                try {
-                  final novo = DadosCliente(
-                    id: idGerado,
-                    nome: nome,
-                    telefone: fone,
-                    endereco: endereco,
-                    documento: doc,
-                  );
-                  final listaAtual = await CacheOffline.carregarClientesLocal();
-                  listaAtual.removeWhere((c) => c.nome.trim().toLowerCase() == nome.toLowerCase());
-                  listaAtual.insert(0, novo);
-                  await CacheOffline.salvarClientesLocal(listaAtual);
-                } catch (_) {}
-
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(backgroundColor: Colors.green, content: Text('✅ Cliente salvo e puxado para a O.S.!')),
-                  );
-                }
-              },
-              child: salvando
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                  : const Text('Salvar e Usar', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  void _buscarClientesParaOS(
-    TextEditingController cC,
-    TextEditingController eC,
-    TextEditingController fC,
-    StateSetter setM,
-  ) async {
-    final lista = await CacheOffline.carregarClientesLocal();
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: corCardFundo,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20)), side: BorderSide(color: corCianoEletrico)),
-      builder: (ctx) {
-        String filtro = '';
-        return StatefulBuilder(
-          builder: (ctx, setB) {
-            final filtrados = lista
-                .where((c) =>
-                    c.nome.toLowerCase().contains(filtro) ||
-                    c.telefone.contains(filtro) ||
-                    c.enderecoCompleto.toLowerCase().contains(filtro))
-                .toList();
-
-            return Container(
-              padding: const EdgeInsets.all(14),
-              height: MediaQuery.of(context).size.height * 0.75,
-              child: Column(
-                children: [
-                  const Text('🔍 Selecionar Cliente Cadastrado', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: corCianoEletrico)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    decoration: const InputDecoration(prefixIcon: Icon(Icons.search, color: corCianoEletrico, size: 18), hintText: 'Pesquisar nome, telefone ou endereço...', isDense: true),
-                    onChanged: (v) => setB(() => filtro = v.toLowerCase()),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: filtrados.isEmpty
-                        ? const Center(child: Text('Nenhum cliente no cache.', style: TextStyle(color: Colors.grey, fontSize: 12)))
-                        : ListView.builder(
-                            itemCount: filtrados.length,
-                            itemBuilder: (_, i) => ListTile(
-                              dense: true,
-                              leading: const CircleAvatar(radius: 16, backgroundColor: Color(0xFF0F354A), child: Icon(Icons.person, color: corCianoEletrico, size: 16)),
-                              title: Text(filtrados[i].nome, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: corTextoClaro)),
-                              subtitle: Text(filtrados[i].enderecoCompleto.isNotEmpty ? filtrados[i].enderecoCompleto : filtrados[i].telefone, style: const TextStyle(color: corCianoSuave, fontSize: 11)),
-                              onTap: () {
-                                setM(() {
-                                  cC.text = filtrados[i].nome;
-                                  eC.text = filtrados[i].enderecoCompleto;
-                                  fC.text = filtrados[i].telefone;
-                                });
-                                Navigator.pop(ctx);
-                              },
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _modalNovaOS() async {
-    final cC = TextEditingController(), fC = TextEditingController(), eC = TextEditingController(), pC = TextEditingController(), atendenteCtrl = TextEditingController();
-    String prioridadeSel = 'Normal';
-    final tecnicosDisponiveis = _tecnicosDeCampo;
-    
-    String? tecnicoSel = tecnicosDisponiveis.isNotEmpty ? tecnicosDisponiveis.first.nome : null;
-    bool salvando = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setM) => AlertDialog(
-          backgroundColor: corCardFundo,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: corCianoEletrico)),
-          title: const Text('📋 Nova Ordem de Serviço (O.S.)', style: TextStyle(color: corCianoEletrico, fontSize: 16)),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Dados do Cliente', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: corCianoEletrico),
-                              foregroundColor: corCianoEletrico,
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            ),
-                            icon: const Icon(Icons.search, size: 13),
-                            label: const Text('Buscar', style: TextStyle(fontSize: 10.5)),
-                            onPressed: () => _buscarClientesParaOS(cC, eC, fC, setM),
-                          ),
-                          const SizedBox(width: 5),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: corCianoEletrico,
-                              foregroundColor: Colors.black,
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            ),
-                            icon: const Icon(Icons.person_add, size: 13),
-                            label: const Text('Cadastrar', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            onPressed: () => _cadastrarNovoClienteParaOS(cC, eC, fC, setM),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(controller: cC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Cliente / Condomínio *', isDense: true)),
-                  const SizedBox(height: 6),
-                  TextField(controller: eC, decoration: const InputDecoration(labelText: 'Endereço da Obra', isDense: true)),
-                  const SizedBox(height: 6),
-                  TextField(controller: atendenteCtrl, decoration: const InputDecoration(labelText: 'Quem vai atender no local (Nome e WhatsApp)', hintText: 'Ex: Sr. Carlos (47) 99999-9999', isDense: true)),
-                  const SizedBox(height: 6),
-                  TextField(controller: fC, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone', isDense: true)),
-                  const SizedBox(height: 10),
-                  TextField(controller: pC, minLines: 3, maxLines: 5, decoration: const InputDecoration(labelText: 'Descrição do Problema / O que fazer', alignLabelWithHint: true)),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: tecnicoSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(labelText: 'Designar Técnico Responsável *', isDense: true),
-                    items: tecnicosDisponiveis.map((u) {
-                      String rotulo = u.nome;
-                      if (u.isSenior) {
-                        rotulo += ' (⭐ Sênior)';
-                      } else {
-                        rotulo += ' (Técnico)';
-                      }
-                      return DropdownMenuItem(value: u.nome, child: Text(rotulo));
-                    }).toList(),
-                    onChanged: (v) => setM(() => tecnicoSel = v),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: prioridadeSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(labelText: 'Prioridade', isDense: true),
-                    items: const [
-                      DropdownMenuItem(value: 'Normal', child: Text('Normal (Padrão)', style: TextStyle(color: corCianoEletrico))),
-                      DropdownMenuItem(value: 'Urgente', child: Text('Urgente', style: TextStyle(color: Colors.orangeAccent))),
-                      DropdownMenuItem(value: 'Emergência', child: Text('Emergência Imediata', style: TextStyle(color: Colors.redAccent))),
-                      DropdownMenuItem(value: 'Plantão', child: Text('🚨 Plantão Especial', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
-                    ],
-                    onChanged: (v) => setM(() => prioridadeSel = v ?? 'Normal'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: corCianoEletrico, foregroundColor: Colors.black),
-              onPressed: salvando ? null : () async {
-                if (cC.text.trim().isEmpty || pC.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Preencha o cliente e o problema.')));
-                  return;
-                }
-                if (tecnicoSel == null || tecnicoSel!.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.amber, content: Text('⚠️ Selecione um técnico responsável.')));
-                  return;
-                }
-
-                setM(() => salvando = true);
-                final numOS = 'OS-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-                final novaOS = OrdemServico(
-                  numeroOS: numOS,
-                  cliente: cC.text.trim(),
-                  telefone: fC.text.trim(),
-                  endereco: eC.text.trim(),
-                  descricaoProblema: atendenteCtrl.text.trim().isNotEmpty ? '[Atender no Local: ${atendenteCtrl.text.trim()}]\n${pC.text.trim()}' : pC.text.trim(),
-                  tecnicoDesignado: tecnicoSel!,
-                  prioridade: prioridadeSel,
-                  status: 'Pendente',
-                  dataAbertura: DateFormat('dd/MM/yyyy • HH:mm').format(DateTime.now()),
-                  visualizadoPeloTecnico: false,
-                );
-
-                await ServicoOS.criarOS(novaOS);
-
-                final tecObj = _tecnicos.cast<UsuarioApp?>().firstWhere(
-                  (u) => u?.nome.trim().toLowerCase() == tecnicoSel!.trim().toLowerCase(),
-                  orElse: () => null,
-                );
-                final loginTecnico = tecObj != null ? tecObj.usuario : tecnicoSel!;
-
-                ServicoNotificacaoOneSignal.enviarNotificacaoOS(
-                  tecnicoLogin: loginTecnico,
-                  numeroOS: numOS,
-                  cliente: cC.text.trim(),
-                  categoria: prioridadeSel,
-                );
-
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text('Criar O.S.'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _modalEditarOS(OrdemServico os) async {
-    final cC = TextEditingController(text: os.cliente);
-    final fC = TextEditingController(text: os.telefone);
-    final eC = TextEditingController(text: os.endereco);
-    final pC = TextEditingController(text: os.descricaoProblema);
-    final atendenteCtrl = TextEditingController(text: _extrairAtendente(os.descricaoProblema) ?? '');
-
-    String prioridadeSel = os.prioridade.isNotEmpty ? os.prioridade : 'Normal';
-    final tecnicosDisponiveis = _tecnicosDeCampo;
-
-    String? tecnicoSel = os.tecnicoDesignado;
-    final existeTec = tecnicosDisponiveis.any((u) => u.nome == tecnicoSel);
-    if (!existeTec && tecnicosDisponiveis.isNotEmpty) {
-      tecnicoSel = tecnicosDisponiveis.first.nome;
-    }
-
-    bool salvando = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setM) => AlertDialog(
-          backgroundColor: corCardFundo,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.amberAccent)),
-          title: Row(
-            children: [
-              const Icon(Icons.edit_note_rounded, color: Colors.amberAccent, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('Editar ${os.numeroOS}', style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Dados do Cliente', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: corTextoClaro)),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: corCianoEletrico),
-                              foregroundColor: corCianoEletrico,
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            ),
-                            icon: const Icon(Icons.search, size: 13),
-                            label: const Text('Buscar', style: TextStyle(fontSize: 10.5)),
-                            onPressed: () => _buscarClientesParaOS(cC, eC, fC, setM),
-                          ),
-                          const SizedBox(width: 5),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: corCianoEletrico,
-                              foregroundColor: Colors.black,
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            ),
-                            icon: const Icon(Icons.person_add, size: 13),
-                            label: const Text('Cadastrar', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            onPressed: () => _cadastrarNovoClienteParaOS(cC, eC, fC, setM),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(controller: cC, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Cliente / Condomínio *', isDense: true)),
-                  const SizedBox(height: 6),
-                  TextField(controller: eC, decoration: const InputDecoration(labelText: 'Endereço da Obra', isDense: true)),
-                  const SizedBox(height: 6),
-                  TextField(controller: atendenteCtrl, decoration: const InputDecoration(labelText: 'Quem vai atender no local (Nome e WhatsApp)', hintText: 'Ex: Sr. Carlos (47) 99999-9999', isDense: true)),
-                  const SizedBox(height: 6),
-                  TextField(controller: fC, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Telefone', isDense: true)),
-                  const SizedBox(height: 10),
-                  TextField(controller: pC, minLines: 3, maxLines: 5, decoration: const InputDecoration(labelText: 'Descrição do Problema / O que fazer', alignLabelWithHint: true)),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: tecnicoSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(labelText: 'Designar Técnico Responsável *', isDense: true),
-                    items: tecnicosDisponiveis.map((u) {
-                      String rotulo = u.nome;
-                      if (u.isSenior) {
-                        rotulo += ' (⭐ Sênior)';
-                      } else {
-                        rotulo += ' (Técnico)';
-                      }
-                      return DropdownMenuItem(value: u.nome, child: Text(rotulo));
-                    }).toList(),
-                    onChanged: (v) => setM(() => tecnicoSel = v),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: prioridadeSel,
-                    dropdownColor: corCardFundo,
-                    decoration: const InputDecoration(labelText: 'Prioridade', isDense: true),
-                    items: const [
-                      DropdownMenuItem(value: 'Normal', child: Text('Normal (Padrão)', style: TextStyle(color: corCianoEletrico))),
-                      DropdownMenuItem(value: 'Urgente', child: Text('Urgente', style: TextStyle(color: Colors.orangeAccent))),
-                      DropdownMenuItem(value: 'Emergência', child: Text('Emergência Imediata', style: TextStyle(color: Colors.redAccent))),
-                      DropdownMenuItem(value: 'Plantão', child: Text('🚨 Plantão Especial', style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold))),
-                    ],
-                    onChanged: (v) => setM(() => prioridadeSel = v ?? 'Normal'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.grey))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent, foregroundColor: Colors.black),
-              onPressed: salvando ? null : () async {
-                if (cC.text.trim().isEmpty || pC.text.trim().isEmpty) return;
-                setM(() => salvando = true);
-
-                final novoTecnicoNome = tecnicoSel ?? os.tecnicoDesignado;
-                final bool mudouTecnico = novoTecnicoNome.trim().toLowerCase() != os.tecnicoDesignado.trim().toLowerCase();
-
-                final dadosAtualizados = {
-                  'cliente': cC.text.trim(),
-                  'telefone': fC.text.trim(),
-                  'endereco': eC.text.trim(),
-                  'descricao_problema': pC.text.trim(),
-                  'tecnico_designado': novoTecnicoNome,
-                  'prioridade': prioridadeSel,
-                };
-
-                try {
-                  if (os.id != null) {
-                    await Supabase.instance.client
-                        .from('ordens_servico')
-                        .update(dadosAtualizados)
-                        .eq('id', os.id!)
-                        .timeout(const Duration(seconds: 8));
-
-                    final tecObj = _tecnicos.cast<UsuarioApp?>().firstWhere(
-                      (u) => u?.nome.trim().toLowerCase() == novoTecnicoNome.trim().toLowerCase(),
-                      orElse: () => null,
-                    );
-                    final loginTecnico = tecObj != null ? tecObj.usuario : novoTecnicoNome;
-
-                    if (mudouTecnico) {
-                      ServicoNotificacaoOneSignal.enviarNotificacaoOS(
-                        tecnicoLogin: loginTecnico,
-                        numeroOS: os.numeroOS,
-                        cliente: cC.text.trim(),
-                      );
-                    } else {
-                      ServicoNotificacaoOneSignal.enviarPush(
-                        destinatarioLogin: loginTecnico,
-                        titulo: '⚠️ O.S. Atualizada (${os.numeroOS})',
-                        mensagem: 'Os dados da O.S. do cliente ${cC.text.trim()} foram atualizados.',
-                        dados: {'tipo': 'ordem_servico', 'os_id': os.numeroOS},
-                      );
-                    }
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.green, content: Text('✅ ${os.numeroOS} atualizada com sucesso!')),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro ao atualizar O.S.: $e')),
-                    );
-                  }
-                } finally {
-                  if (ctx.mounted) setM(() => salvando = false);
-                }
-              },
-              child: salvando
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                  : const Text('Salvar Alterações'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-    void _modalVoltarOSGarantia(OrdemServico os) {
+  void _modalVoltarOSGarantia(OrdemServico os) {
     final motivoC = TextEditingController();
-    String destinoEscolhido = 'Oficina'; // 'Oficina', 'Orcamento', 'Rua', 'Faturamento'
+    String destinoEscolhido = 'Oficina';
     String tecnicoSel = os.tecnicoDesignado;
     if (_tecnicosDeCampo.isNotEmpty && !_tecnicosDeCampo.any((t) => t.nome == tecnicoSel)) {
       tecnicoSel = _tecnicosDeCampo.first.nome;
@@ -1251,28 +461,20 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                           'visualizado_pelo_tecnico': false,
                         }).eq('id', idNum!);
 
-                        if (destinoEscolhido == 'Faturamento') {
-                          try {
-                            await Supabase.instance.client.from('servicos').insert({
-                              'cliente': os.cliente,
-                              'telefone': os.telefone,
-                              'endereco': os.endereco,
-                              'descricao': "[${os.numeroOS}] $novoProb",
-                              'quantidade': 1,
-                              'valor_unitario': 0.0,
-                              'status': 'Pendente',
-                              'tecnico': tecnicoSel,
-                              'data': DateFormat('dd/MM/yyyy').format(DateTime.now()),
-                            });
-                          } catch (_) {}
+                        if (destinoEscolhido == 'Oficina') {
+                          ServicoNotificacaoOneSignal.enviarNotificacaoOficina(
+                            tecnicoLogin: tecnicoSel,
+                            numeroOS: os.numeroOS,
+                            cliente: os.cliente,
+                          );
+                        } else {
+                          ServicoNotificacaoOneSignal.enviarNotificacaoOS(
+                            tecnicoLogin: tecnicoSel,
+                            numeroOS: os.numeroOS,
+                            cliente: os.cliente,
+                            categoria: prioridade,
+                          );
                         }
-
-                        ServicoNotificacaoOneSignal.enviarNotificacaoOS(
-                          tecnicoLogin: tecnicoSel,
-                          numeroOS: os.numeroOS,
-                          cliente: os.cliente,
-                          categoria: prioridade,
-                        );
 
                         if (ctx.mounted) Navigator.pop(ctx);
                         if (mounted) {
@@ -1315,6 +517,49 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     );
   }
 
+  Future<void> _gerarDocOS(OrdemServico os, String acao) async {
+    try {
+      final clienteObj = DadosCliente(
+        nome: os.cliente,
+        telefone: os.telefone,
+        endereco: os.endereco,
+      );
+
+      final relatorioTec = (os.observacaoTecnico != null && os.observacaoTecnico!.isNotEmpty)
+          ? '\n\nRelatório de Execução:\n${os.observacaoTecnico}'
+          : '';
+
+      final f = await PdfEngine.apenasGerarPdf(
+        tipoDoc: 'ORDEM DE SERVIÇO',
+        cliente: clienteObj,
+        destaque: 'ORDEM DE SERVIÇO - ${os.numeroOS}',
+        itens: [
+          ItemServico(
+            descricao: '${os.descricaoProblema}$relatorioTec',
+            quantidade: 1,
+            valorUnitario: 0.0,
+          ),
+        ],
+        obs: 'Prioridade: ${os.prioridade.toUpperCase()} | Técnico: ${os.tecnicoDesignado} | Aberta em: ${os.dataAbertura}',
+      );
+
+      if (acao == 'imprimir') {
+        await Share.shareXFiles([XFile(f.path)], text: 'Imprimir O.S. ${os.numeroOS}');
+      } else if (acao == 'whats') {
+        await Share.shareXFiles(
+          [XFile(f.path)],
+          text: 'Olá! Segue O.S. *${os.numeroOS}* - ${os.cliente}\nPrioridade: ${os.prioridade} | Status: ${os.status}',
+        );
+      } else {
+        await Share.shareXFiles([XFile(f.path)], text: 'O.S. ${os.numeroOS} - ${os.cliente}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Erro O.S.: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1322,7 +567,6 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
         children: [
           const BannerOSPrime(subtituloTela: 'Gestão de O.S. (Despacho)', exibirBotaoVoltar: true),
 
-                    // FILTROS DE STATUS ORGANIZADOS EM 4 BOTÕES INDIVIDUAIS
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: Row(
@@ -1369,57 +613,6 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
             ),
           ),
 
-          // BARRA DE FERRAMENTAS: FILTRO RETRÁTIL + RELATÓRIOS + NOVA O.S.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              children: [
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: _mostrarBusca ? corCianoEletrico : Colors.white24),
-                    foregroundColor: _mostrarBusca ? corCianoEletrico : Colors.grey,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: Icon(_mostrarBusca ? Icons.close : Icons.filter_alt_outlined, size: 16),
-                  label: Text(_mostrarBusca ? 'Fechar' : 'Filtrar', style: const TextStyle(fontSize: 11)),
-                  onPressed: () => setState(() {
-                    _mostrarBusca = !_mostrarBusca;
-                    if (!_mostrarBusca) _filtroPesquisa = '';
-                  }),
-                ),
-                const SizedBox(width: 6),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.amberAccent),
-                    foregroundColor: Colors.amberAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.analytics_outlined, size: 16),
-                  label: const Text('Relatórios', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  onPressed: () async {
-                    final snap = await Supabase.instance.client.from('ordens_servico').select().order('id', ascending: false);
-                    final lista = snap.map((m) => OrdemServico.fromMap(m)).toList();
-                    if (mounted) _modalSuperRelatorio(lista);
-                  },
-                ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: corCianoEletrico,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Nova O.S.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                  onPressed: _modalNovaOS,
-                ),
-              ],
-            ),
-          ),
-
           if (_mostrarBusca)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1435,7 +628,6 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
               ),
             ),
 
-          // LISTAGEM DE O.S.
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _stream,
@@ -1443,13 +635,11 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                 final todos = (snap.data ?? []).map((m) => OrdemServico.fromMap(m)).toList();
 
                 final filtrados = todos.where((os) {
-                                    final st = os.status.trim().toLowerCase();
-                  if (_filtroStatus == 'Todas') {
-                    // Carrega todas as O.S. (Pendentes, Em Andamento, Concluídas e Histórico 90d)
-                  } else if (_filtroStatus == 'Pendente') {
+                  final st = os.status.trim().toLowerCase();
+                  if (_filtroStatus == 'Pendente') {
                     if (st != 'pendente') return false;
                   } else if (_filtroStatus == 'Em Andamento') {
-                    if (st != 'em andamento') return false;
+                    if (st != 'em andamento' && !st.contains('bancada')) return false;
                   } else if (_filtroStatus == 'Concluída') {
                     if (st != 'concluída' && st != 'concluida' && st != 'faturada') return false;
                   }
@@ -1465,7 +655,7 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
-                      child: Text('Nenhuma O.S. encontrada para este filtro.\n(O.S. faturadas ficam no Histórico por 90 dias)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      child: Text('Nenhuma O.S. encontrada para este filtro.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
                     ),
                   );
                 }
@@ -1475,147 +665,124 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
                   itemCount: filtrados.length,
                   itemBuilder: (_, i) {
                     final os = filtrados[i];
-                    return InkWell(onTap: () => _modalDetalhesOSAdmin(os), borderRadius: BorderRadius.circular(10), child: Card(
+                    return Card(
                       margin: const EdgeInsets.only(bottom: 8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _corPrioridade(os.prioridade).withAlpha(40),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: _corPrioridade(os.prioridade)),
-                                  ),
-                                  child: Text("${os.numeroOS} • ${os.prioridade.toUpperCase()}", style: TextStyle(color: _corPrioridade(os.prioridade), fontWeight: FontWeight.bold, fontSize: 10.5)),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(color: _corStatus(os.status).withAlpha(30), borderRadius: BorderRadius.circular(6)),
-                                  child: Text(os.status, style: TextStyle(color: _corStatus(os.status), fontWeight: FontWeight.bold, fontSize: 11)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                                                        Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: corTextoClaro)),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1, bottom: 2),
-                              child: Text(
-                                "📄 CPF/CNPJ: ${_mapaDocClientesAdm[os.cliente.trim().toLowerCase()] ?? 'Não informado'}",
-                                style: const TextStyle(fontSize: 11, color: corTextoClaro, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            Builder(builder: (ctx) {
-                              final atend = _extrairAtendente(os.descricaoProblema);
-                              if (atend == null) return const SizedBox.shrink();
-                              return Container(
-                                margin: const EdgeInsets.only(top: 2, bottom: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.amberAccent.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.amberAccent.withOpacity(0.5)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.person_pin_rounded, size: 14, color: Colors.amberAccent),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text("Atender no Local: $atend", style: const TextStyle(fontSize: 11, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => _modalDetalhesOSAdmin(os),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _corPrioridade(os.prioridade).withAlpha(40),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: _corPrioridade(os.prioridade)),
                                     ),
-                                  ],
-                                ),
-                              );
-                            }),
-                            if (os.endereco.isNotEmpty) Text("📍 ${os.endereco}", style: const TextStyle(fontSize: 11, color: corCianoSuave)),
-                            if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Icon(Icons.person, size: 13, color: corCianoSuave),
-                                const SizedBox(width: 4),
-                                Text("Técnico: ${os.tecnicoDesignado}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
-                                const Spacer(),
-                                Text("Aberta: ${os.dataAbertura}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(6)),
-                              child: Text(os.descricaoProblema, style: const TextStyle(fontSize: 11.5, color: corTextoClaro)),
-                            ),
-                            const Divider(height: 12),
-
-                            // AÇÕES DA O.S. (SEM OS BOTÕES 'FATURAR' E 'PDF')
-                                                        Wrap(
-                              alignment: WrapAlignment.end,
-                              spacing: 5,
-                              runSpacing: 4,
-                              children: [
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.orangeAccent, width: 1),
-                                    foregroundColor: Colors.orangeAccent,
-                                    visualDensity: VisualDensity.compact,
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    child: Text("${os.numeroOS} • ${os.prioridade.toUpperCase()}", style: TextStyle(color: _corPrioridade(os.prioridade), fontWeight: FontWeight.bold, fontSize: 10.5)),
                                   ),
-                                  icon: const Icon(Icons.replay_rounded, size: 13),
-                                  label: const Text('Voltar O.S.', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _modalVoltarOSGarantia(os),
-                                ),
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.amberAccent, width: 1),
-                                    foregroundColor: Colors.amberAccent,
-                                    visualDensity: VisualDensity.compact,
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(color: _corStatus(os.status).withAlpha(30), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(os.status, style: TextStyle(color: _corStatus(os.status), fontWeight: FontWeight.bold, fontSize: 11)),
                                   ),
-                                  icon: const Icon(Icons.edit, size: 13),
-                                  label: const Text('Editar', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _modalEditarOS(os),
-                                ),
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: corVerdeWhats, width: 1),
-                                    foregroundColor: corVerdeWhats,
-                                    visualDensity: VisualDensity.compact,
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(child: Text(os.cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: corTextoClaro))),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_note, color: corCianoEletrico, size: 20),
+                                    tooltip: 'Alterar Cliente',
+                                    onPressed: () => _modalAlterarClienteOS(os),
                                   ),
-                                  icon: const Icon(Icons.share, size: 13),
-                                  label: const Text('Whats', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _gerarDocOS(os, 'whats'),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  "📄 CPF/CNPJ: ${_mapaDocClientesAdm[os.cliente.trim().toLowerCase()] ?? 'Não informado'}",
+                                  style: const TextStyle(fontSize: 11, color: corTextoClaro, fontWeight: FontWeight.bold),
                                 ),
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: corCianoEletrico, width: 1),
-                                    foregroundColor: corCianoEletrico,
-                                    visualDensity: VisualDensity.compact,
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              if (os.endereco.isNotEmpty) Text("📍 ${os.endereco}", style: const TextStyle(fontSize: 11, color: corCianoSuave)),
+                              if (os.telefone.isNotEmpty) Text("📞 ${os.telefone}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.person, size: 13, color: corCianoSuave),
+                                  const SizedBox(width: 4),
+                                  Text("Técnico: ${os.tecnicoDesignado}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: corTextoClaro)),
+                                  const Spacer(),
+                                  Text("Aberta: ${os.dataAbertura}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(color: const Color(0x33000000), borderRadius: BorderRadius.circular(6)),
+                                child: Text(os.descricaoProblema, style: const TextStyle(fontSize: 11.5, color: corTextoClaro)),
+                              ),
+                              const Divider(height: 12),
+                              Wrap(
+                                alignment: WrapAlignment.end,
+                                spacing: 5,
+                                runSpacing: 4,
+                                children: [
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Colors.orangeAccent, width: 1),
+                                      foregroundColor: Colors.orangeAccent,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    icon: const Icon(Icons.alt_route_rounded, size: 13),
+                                    label: const Text('Despachar Destino', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _modalVoltarOSGarantia(os),
                                   ),
-                                  icon: const Icon(Icons.print, size: 13),
-                                  label: const Text('Imprimir', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _gerarDocOS(os, 'imprimir'),
-                                ),
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                                  tooltip: 'Excluir O.S.',
-                                  onPressed: () => _confirmarExcluirOS(os.id),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: corVerdeWhats, width: 1),
+                                      foregroundColor: corVerdeWhats,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    icon: const Icon(Icons.share, size: 13),
+                                    label: const Text('Whats', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _gerarDocOS(os, 'whats'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: corCianoEletrico, width: 1),
+                                      foregroundColor: corCianoEletrico,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    icon: const Icon(Icons.print, size: 13),
+                                    label: const Text('Imprimir', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                    onPressed: () => _gerarDocOS(os, 'imprimir'),
+                                  ),
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                                    tooltip: 'Excluir O.S.',
+                                    onPressed: () => _confirmarExcluirOS(os.id),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -1629,6 +796,3 @@ class _TelaOSAdminState extends State<TelaOSAdmin> {
     );
   }
 }
-
-
-
