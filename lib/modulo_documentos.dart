@@ -462,7 +462,8 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                             categoria: prioridadeSel,
                           );
 
-                          orc['status'] = "Aprovado - Em Execução ($numOS)";
+                          orc['status'] = "Aprovado - $tipoExecucao ($numOS)";
+                          orc['numero_os_origem'] = numOS;
                           orc['numero_os_origem'] = numOS;
                           await ServicoOrcamentosSalvos.salvarOuAtualizar(orc);
                           await _iniciar();
@@ -842,41 +843,45 @@ class _TelaListaOrcamentosSalvosState extends State<TelaListaOrcamentosSalvos> {
                         label: const Text('Aprovar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: () => _aprovarOrcamentoSemFaturamento(orc),
                       ),
-                    if (isAprovado)
+                                        if (isAprovado)
                       Builder(builder: (ctx) {
-                        final numOS = (orc['numero_os_origem'] ?? '').toString().trim().toLowerCase();
-                        final cliNome = (orc['cliente_nome'] ?? '').toString().trim().toLowerCase();
-                        final bool jaEmAndamentoNoBanco = _todasOSDoBanco.any((os) {
-                          final stOS = (os['status'] ?? '').toString().trim().toLowerCase();
-                          if (stOS == 'aguardando orçamento' || stOS == 'aguardando orcamento') return false;
-                          final nBanco = (os['numero_os'] ?? '').toString().trim().toLowerCase();
-                          final cBanco = (os['cliente'] ?? '').toString().trim().toLowerCase();
-                          return (numOS.isNotEmpty && nBanco == numOS) || (cliNome.isNotEmpty && cBanco == cliNome);
-                        });
+                        final bool emOficina = status.contains('Oficina');
+                        final bool emRua = status.contains('Rua');
+                        final bool finalizado = status.contains('Finalizado') || status.contains('Faturad');
 
-                        final bool jaDevolvido = jaEmAndamentoNoBanco || status.contains('Em Execução') || status.contains('O.S.') || status.contains('Finalizado') || status.contains('Faturado');
-                        if (jaDevolvido) {
+                        if (finalizado) {
                           return OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: corCianoSuave.withOpacity(0.5)),
-                              foregroundColor: corCianoSuave,
+                              side: BorderSide(color: corVerdeWhats.withOpacity(0.5)),
+                              foregroundColor: corVerdeWhats,
                               visualDensity: VisualDensity.compact,
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             ),
-                            icon: const Icon(Icons.check_circle_outline, size: 14, color: corCianoSuave),
-                            label: const Text('O.S. em Execução', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.check_circle, size: 14, color: corVerdeWhats),
+                            label: const Text('Concluído e Faturado', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
                             onPressed: null,
                           );
                         }
+
+                        String rotuloBotao = 'Despachar O.S. (Oficina / Rua)';
+                        Color corBtn = Colors.amberAccent;
+                        if (emOficina) {
+                          rotuloBotao = 'Em Oficina (Despachar Rua)';
+                          corBtn = Colors.orangeAccent;
+                        } else if (emRua) {
+                          rotuloBotao = 'Em Rua (Despachar Oficina)';
+                          corBtn = corCianoEletrico;
+                        }
+
                         return ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amberAccent,
+                            backgroundColor: corBtn,
                             foregroundColor: Colors.black,
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           ),
-                          icon: const Icon(Icons.assignment_ind_rounded, size: 15),
-                          label: const Text('Devolver O.S. ao Técnico', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          icon: const Icon(Icons.alt_route_rounded, size: 15),
+                          label: Text(rotuloBotao, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                           onPressed: () => _modalDevolverOSComItens(orc),
                         );
                       }),
